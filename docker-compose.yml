@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Redis for the broker and work queue
+  redis:
+    image: redis:7-alpine
+    container_name: llmama-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LLMama Broker Client
+  llmama-client:
+    build: .
+    container_name: llmama-client
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OLLAMA_HOST=host.docker.internal  # Assumes Ollama running on host
+      - OLLAMA_PORT=11434
+      - BROKER_HOST=redis
+      - BROKER_PORT=6379
+      - BROKER_AUTH_TOKEN=your-secure-token-here
+      - JWT_SECRET=your-super-secret-jwt-key
+      - API_KEY=your-api-key-here
+      - WORKER_ID=docker-worker-001
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis_data:
