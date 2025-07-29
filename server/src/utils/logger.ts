@@ -1,69 +1,97 @@
 import winston from 'winston';
-import { config } from '@/config';
+import path from 'path';
+import fs from 'fs';
 
-// Custom log format
+// Ensure logs directory exists
+const logDir = path.dirname('./logs/llmama-server.log');
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+
+// Safe JSON stringify function to handle circular references
+const safeStringify = (obj: any, space?: number): string => {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular Reference]';
+      }
+      seen.add(value);
+    }
+    // Handle Error objects properly
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+        stack: value.stack,
+        ...(value as any) // Include any additional properties
+      };
+    }
+    return value;
+  }, space);
+};
+
 const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.timestamp({
+    format: 'YYYY-MM-DD HH:mm:ss'
+  }),
   winston.format.errors({ stack: true }),
   winston.format.json(),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    return JSON.stringify({
-      timestamp,
-      level,
-      message,
-      ...meta,
-    });
+  winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
+    let logMessage = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+    
+    if (stack) {
+      logMessage += `\n${stack}`;
+    }
+    
+    if (Object.keys(meta).length > 0) {
+      try {
+        logMessage += `\n${safeStringify(meta, 2)}`;
+      } catch (error) {
+        logMessage += `\n[Error serializing metadata: ${error instanceof Error ? error.message : 'Unknown error'}]`;
+      }
+    }
+    
+    return logMessage;
   })
 );
 
 // Create logger instance
 const baseLogger = winston.createLogger({
-  level: config.logging.level,
+  level: process.env.LOG_LEVEL || 'info',
   format: logFormat,
-  defaultMeta: {
-    service: 'llmama-server',
-    serverId: config.server.id,
-  },
+  defaultMeta: { service: 'llmama-server' },
   transports: [
-    // Console transport
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      ),
-    }),
-    
-    // File transport for all logs
-    new winston.transports.File({
-      filename: config.logging.filePath,
-      maxsize: 10 * 1024 * 1024, // 10MB
-      maxFiles: 5,
-      tailable: true,
-    }),
-    
-    // Error file transport
-    new winston.transports.File({
-      filename: config.logging.filePath.replace('.log', '-error.log'),
+    new winston.transports.File({ 
+      filename: './logs/error.log', 
       level: 'error',
-      maxsize: 10 * 1024 * 1024, // 10MB
+      maxsize: 5242880, // 5MB
       maxFiles: 5,
-      tailable: true,
     }),
-  ],
-  
-  // Handle exceptions and rejections
-  exceptionHandlers: [
-    new winston.transports.File({
-      filename: config.logging.filePath.replace('.log', '-exceptions.log'),
-    }),
-  ],
-  
-  rejectionHandlers: [
-    new winston.transports.File({
-      filename: config.logging.filePath.replace('.log', '-rejections.log'),
+    new winston.transports.File({ 
+      filename: './logs/llmama-server.log',
+      maxsize: 5242880, // 5MB
+      maxFiles: 5,
     }),
   ],
 });
+
+// Add console transport in development
+if (process.env.NODE_ENV !== 'production') {
+  baseLogger.add(new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.simple(),
+      winston.format.printf(({ timestamp, level, message, stack }) => {
+        let logMessage = `${timestamp} [${level}]: ${message}`;
+        if (stack) {
+          logMessage += `\n${stack}`;
+        }
+        return logMessage;
+      })
+    )
+  }));
+}
 
 // Extend logger with custom methods
 interface ExtendedLogger extends winston.Logger {
