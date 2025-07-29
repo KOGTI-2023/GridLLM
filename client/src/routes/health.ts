@@ -8,7 +8,7 @@ const router = Router();
 router.get("/", (req: Request, res: Response) => {
 	res.json({
 		status: "ok",
-		service: "llmama-worker",
+		service: "GridLLM-worker",
 		workerId: config.worker.id,
 		timestamp: new Date().toISOString(),
 		uptime: process.uptime(),

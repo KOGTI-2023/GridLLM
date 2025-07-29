@@ -1,9 +1,9 @@
-# LLMama Development Scripts
+# GridLLM Development Scripts
 .PHONY: help install install-server install-client run-server run-client build-server build-client clean logs-server logs-client test docker-up docker-down
 
 # Default target
 help:
-	@echo "LLMama Development Commands:"
+	@echo "GridLLM Development Commands:"
 	@echo ""
 	@echo "  Setup Commands:"
 	@echo "    install         - Install dependencies for both server and client"
@@ -41,12 +41,12 @@ install-client:
 
 # Development commands
 run-server:
-	@echo "Starting LLMama Server..."
+	@echo "Starting GridLLM Server..."
 	@echo "Server will be available at http://localhost:4000"
 	cd server && npm run dev
 
 run-client:
-	@echo "Starting LLMama Worker Client..."
+	@echo "Starting GridLLM Worker Client..."
 	@echo "Worker health check at http://localhost:3000"
 	cd client && npm run dev
 
@@ -62,11 +62,11 @@ build-client:
 # Utility commands
 logs-server:
 	@echo "Server logs:"
-	@tail -f server/logs/llmama-server.log 2>/dev/null || echo "No server logs found. Start the server first."
+	@tail -f server/logs/GridLLM-server.log 2>/dev/null || echo "No server logs found. Start the server first."
 
 logs-client:
 	@echo "Client logs:"
-	@tail -f logs/llmama-worker.log 2>/dev/null || echo "No client logs found. Start the client first."
+	@tail -f logs/GridLLM-worker.log 2>/dev/null || echo "No client logs found. Start the client first."
 
 clean:
 	@echo "Cleaning build artifacts and logs..."
@@ -81,7 +81,7 @@ test:
 
 # Docker commands
 docker-up:
-	@echo "Starting Redis and LLMama Server with Docker..."
+	@echo "Starting Redis and GridLLM Server with Docker..."
 	docker-compose up -d
 	@echo "Server available at http://localhost:4000"
 	@echo "Redis available at localhost:6379"
@@ -92,7 +92,7 @@ docker-down:
 
 # Quick status check
 status:
-	@echo "=== LLMama Network Status ==="
+	@echo "=== GridLLM Network Status ==="
 	@echo ""
 	@echo "Server Status:"
 	@curl -s http://localhost:4000/health 2>/dev/null | jq '.' || echo "Server not responding"

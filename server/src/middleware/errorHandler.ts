@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "@/utils/logger";
 
-export interface LLMamaError extends Error {
+export interface GridLLMError extends Error {
 	statusCode?: number;
 	code?: string;
 	details?: any;
@@ -12,8 +12,8 @@ export const createError = (
 	statusCode: number = 500,
 	code?: string,
 	details?: any
-): LLMamaError => {
-	const error = new Error(message) as LLMamaError;
+): GridLLMError => {
+	const error = new Error(message) as GridLLMError;
 	error.statusCode = statusCode;
 	if (code) error.code = code;
 	error.details = details;
@@ -27,7 +27,7 @@ export const asyncHandler = (fn: Function) => {
 };
 
 export const errorHandler = (
-	error: LLMamaError,
+	error: GridLLMError,
 	req: Request,
 	res: Response,
 	next: NextFunction

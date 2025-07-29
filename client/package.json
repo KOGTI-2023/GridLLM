@@ -1,7 +1,7 @@
 {
-	"name": "llmama-worker-client",
+	"name": "GridLLM-worker-client",
 	"version": "1.0.0",
-	"description": "Distributed AI inference worker client for LLMama server",
+	"description": "Distributed AI inference worker client for GridLLM server",
 	"main": "dist/index.js",
 	"scripts": {
 		"dev": "tsx watch src/index.ts",
@@ -11,8 +11,8 @@
 		"test:watch": "jest --watch",
 		"lint": "eslint src/**/*.ts",
 		"lint:fix": "eslint src/**/*.ts --fix",
-		"docker:build": "docker build -t llmama-client .",
-		"docker:run": "docker run -p 3000:3000 llmama-client"
+		"docker:build": "docker build -t GridLLM-client .",
+		"docker:run": "docker run -p 3000:3000 GridLLM-client"
 	},
 	"keywords": [
 		"ai",

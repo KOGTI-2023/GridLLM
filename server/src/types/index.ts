@@ -117,7 +117,7 @@ export interface ServerStatus {
 }
 
 // Error Types
-export interface LLMamaError extends Error {
+export interface GridLLMError extends Error {
 	statusCode?: number;
 	code?: string;
 	details?: any;
