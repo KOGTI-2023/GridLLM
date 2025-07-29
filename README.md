@@ -1,69 +1,79 @@
-# LLMama Worker Client
+# GridLLM - Distributed AI Inference Network
 
-A distributed AI inference worker client that connects to the central LLMama server. This worker provides local Ollama compute resources to a distributed AI inference network with hot-join capability.
+A distributed AI inference system with hot-join capability, designed for dynamic worker pools. Perfect for adding your MacBook or other machines to a shared AI compute network when available.
 
 ## Architecture
 
-This repository contains:
-- **Worker Client** (`/src`) - Connects to central server, provides compute resources
-- **Server** (`/server`) - Central coordinator for managing workers and distributing jobs
+This repository contains a complete server/client architecture:
 
-### Hot-Join Worker Design
+- **Server** (`/server`) - Central coordinator that manages workers and distributes inference jobs
+- **Client** (`/client`) - Hot-joinable worker that provides local Ollama compute resources
 
-Workers can dynamically join and leave the network:
-- Workers discover and connect to the central server via configuration
-- Workers register their capabilities (available models, performance tier, resources)
-- Server assigns jobs based on worker availability and current load
-- Workers gracefully disconnect when needed (perfect for laptop usage)
+### Hot-Join Design Philosophy
+
+The system is designed for dynamic worker participation:
+- **Central Server**: Always-on coordinator that receives inference requests and manages job distribution
+- **Worker Clients**: Can join/leave the network at any time without disrupting the system
+- **Intelligent Job Routing**: Server automatically routes jobs to available workers based on model availability and current load
+- **Graceful Disconnection**: Workers finish current jobs before leaving the network
 
 ## Features
 
-- **Hot-Join Capability**: Connect/disconnect workers dynamically
-- **Automatic Job Distribution**: Server assigns jobs based on worker utilization
-- **Ollama Integration**: Local AI model serving with health monitoring
-- **Resource Monitoring**: Real-time system resource tracking
-- **Graceful Shutdown**: Wait for current jobs to complete before disconnecting
-- **Fault Tolerance**: Automatic reconnection and job retry mechanisms
+- 🔥 **Hot-Join Capability**: Workers can connect/disconnect dynamically
+- 🎯 **Smart Job Distribution**: Automatic load balancing based on worker utilization
+- 🤖 **Ollama Integration**: Seamless local AI model serving
+- 📊 **Resource Monitoring**: Real-time system resource tracking
+- 🛡️ **Fault Tolerance**: Automatic reconnection and job retry mechanisms
+- 🔧 **Easy Management**: Simple Makefile commands for common operations
 
 ## Prerequisites
 
-Before running this project, ensure you have:
+### For the Central Server (Always-On Machine)
+- **Node.js** (v18 or higher)
+- **Redis** server
+- **npm** package manager
 
-1. **Node.js** (v18 or higher)
-2. **Redis** server running (for the central server)
-3. **Ollama** installed and running locally on worker machines
-4. **npm** or **yarn** package manager
+### For Worker Clients (Hot-Join Machines)
+- **Node.js** (v18 or higher)
+- **Ollama** installed and running locally
+- **npm** package manager
 
-### Installing Prerequisites
+## Installation
 
-#### Install Node.js
+### Install Dependencies
+
 ```bash
-# macOS (using Homebrew)
-brew install node
+# Install all dependencies (recommended)
+make install
 
-# Or download from https://nodejs.org/
+# Or install manually
+cd server && npm install
+cd ../client && npm install
 ```
 
-#### Install and Start Redis (for server only)
+### Install Prerequisites
+
+#### Redis (Server Machine Only)
 ```bash
 # macOS (using Homebrew)
 brew install redis
 brew services start redis
 
 # Or using Docker
-docker run -d -p 6379:6379 redis:7-alpine
+docker run -d -p 6379:6379 --name gridllm-redis redis:7-alpine
 ```
 
-#### Install and Start Ollama (on each worker)
+#### Ollama (Worker Machines)
 ```bash
 # macOS
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Start Ollama
+# Start Ollama service
 ollama serve
 
-# Pull a model (in another terminal)
-ollama pull llama2  # or any other model you prefer
+# Pull some models
+ollama pull llama3.2
+ollama pull qwen2.5
 ```
 
 ## Quick Start
@@ -71,40 +81,56 @@ ollama pull llama2  # or any other model you prefer
 ### 1. Start the Central Server
 
 ```bash
-# In the server directory
+# Using Makefile (recommended)
+make run-server
+
+# Or manually
 cd server
-npm install
 cp .env.example .env
-# Edit .env with your configuration
 npm run dev
 ```
 
-The server will start on port 4000 by default.
+The server starts on port 4000 by default and provides:
+- Inference API at `http://localhost:4000/inference`
+- Health monitoring at `http://localhost:4000/health`
+- Worker management endpoints
 
 ### 2. Start Worker Clients
 
 ```bash
-# In the main directory
-npm install
+# Using Makefile (recommended)  
+make run-client
+
+# Or manually
+cd client
 cp .env.example .env
-# Edit .env with your server connection details
 npm run dev
 ```
 
-Workers will automatically connect to the server and register their capabilities.
+Workers automatically:
+- Connect to the server
+- Register available Ollama models
+- Start processing assigned jobs
 
 ### 3. Submit Inference Requests
 
-Submit requests to the server (not individual workers):
+Send requests to the server (not individual workers):
 
 ```bash
+# Basic inference request
 curl -X POST http://localhost:4000/inference \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "llama2",
-    "prompt": "Hello, how are you?",
+    "model": "llama3.2",
+    "prompt": "Explain quantum computing in simple terms",
     "priority": "medium"
   }'
+
+# Check available models across all workers
+curl http://localhost:4000/inference/models
+
+# Check worker status
+curl http://localhost:4000/health/workers
 ```
 
 ## Configuration
@@ -112,123 +138,274 @@ curl -X POST http://localhost:4000/inference \
 ### Server Configuration (`server/.env`)
 
 ```env
-# Server Configuration
+# Server Settings
 PORT=4000
+SERVER_ID=gridllm-server-1
+
+# Redis Configuration
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
 # Worker Management
 WORKER_HEARTBEAT_TIMEOUT=60000
 MAX_CONCURRENT_JOBS_PER_WORKER=1
+
+# Logging
+LOG_LEVEL=info
 ```
 
-### Worker Configuration (`.env`)
+### Client Configuration (`client/.env`)
 
 ```env
-# Worker Configuration
-PORT=3000
-WORKER_ID=worker-macbook-001
+# Worker Settings
+PORT=3002
+WORKER_ID=macbook-worker-001
 
 # Server Connection
-SERVER_HOST=localhost
-SERVER_PORT=4000
 SERVER_REDIS_HOST=localhost
 SERVER_REDIS_PORT=6379
 
 # Ollama Configuration
 OLLAMA_HOST=localhost
 OLLAMA_PORT=11434
+
+# Resource Limits
+MAX_CONCURRENT_JOBS=1
+HEARTBEAT_INTERVAL=30000
+
+# Logging
+LOG_LEVEL=info
 ```
 
-## Hot-Join Usage
+## Development Workflow
 
-### Adding Your MacBook to the Pool
+### Using the Makefile (Recommended)
 
-1. **Start your worker** when you want to contribute compute:
 ```bash
-npm run dev
+# Install all dependencies
+make install
+
+# Start the server
+make run-server
+
+# Start a worker client (in another terminal)
+make run-client
+
+# Check system status
+make status
+
+# View logs
+make logs-server
+make logs-client
+
+# Stop all processes
+make stop
+
+# Clean build artifacts
+make clean
+
+# Build for production
+make build
 ```
 
-2. **Monitor your worker** via the local health endpoint:
+### Manual Development (Alternative)
+
 ```bash
-curl http://localhost:3000/worker/status
+# Server development
+cd server && npm run dev
+
+# Client development
+cd client && npm run dev
+
+# Build for production
+cd server && npm run build && npm start
+cd client && npm run build && npm start
 ```
 
-3. **Gracefully disconnect** when you need your MacBook:
+## Hot-Join Usage Examples
+
+### Scenario 1: Adding Your MacBook to the Pool
+
 ```bash
-# Ctrl+C or SIGTERM - worker will finish current job before stopping
+# When you want to contribute compute power
+make run-client
+
+# Monitor your worker's status
+curl http://localhost:3002/health
+
+# When you need your MacBook back
+# Ctrl+C (worker gracefully finishes current job)
 ```
 
-### Managing the Network
+### Scenario 2: Multi-Worker Setup
 
-**Server Status:**
 ```bash
-curl http://localhost:4000/health/workers  # View all connected workers
-curl http://localhost:4000/health/jobs     # View job queue status
-curl http://localhost:4000/inference/queue # Detailed queue information
+# Terminal 1: Start server
+make run-server
+
+# Terminal 2: Start worker 1 (MacBook)
+WORKER_ID=macbook-worker make run-client
+
+# Terminal 3: Start worker 2 (Desktop) 
+WORKER_ID=desktop-worker PORT=3003 make run-client
+
+# Check all workers
+curl http://localhost:4000/health/workers
 ```
 
-**Available Models:**
+## Monitoring and Management
+
+### Server Health Endpoints
+
 ```bash
-curl http://localhost:4000/inference/models  # Models across all workers
+# Overall server status
+curl http://localhost:4000/health
+
+# Connected workers
+curl http://localhost:4000/health/workers
+
+# Job queue status  
+curl http://localhost:4000/health/jobs
+
+# Available models across all workers
+curl http://localhost:4000/inference/models
+```
+
+### Worker Health Endpoints
+
+```bash
+# Worker status
+curl http://localhost:3002/health
+
+# Worker capabilities
+curl http://localhost:3002/health/capabilities
+
+# Current jobs
+curl http://localhost:3002/health/jobs
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Redis Connection Failed**:
-   - Ensure Redis is running: `redis-cli ping`
-   - Check Redis host/port in `.env`
+**1. "Model not available on any worker"**
+- Ensure at least one worker is connected: `curl http://localhost:4000/health/workers`
+- Check if worker has the requested model: `curl http://localhost:3002/health/capabilities`
+- Verify Ollama is running: `ollama list`
 
-2. **Ollama Not Found**:
-   - Ensure Ollama is running: `curl http://localhost:11434/api/version`
-   - Check Ollama host/port in `.env`
+**2. Worker connection failures**
+- Check Redis is running: `redis-cli ping`
+- Verify Redis connection settings in `.env`
+- Check server logs: `make logs-server`
 
-3. **Permission Errors**:
-   - Ensure log directory is writable: `mkdir -p logs && chmod 755 logs`
+**3. Port conflicts**
+- Change ports in `.env` files
+- Or kill conflicting processes: `lsof -ti:PORT | xargs kill`
 
-4. **Port Already in Use**:
-   - Change the PORT in `.env` file
-   - Or kill the process using the port: `lsof -ti:3000 | xargs kill -9`
+**4. Ollama connection errors**
+- Ensure Ollama is running: `curl http://localhost:11434/api/version`
+- Check Ollama host/port in client `.env`
 
 ### Logs
 
-Check application logs:
 ```bash
-# View logs in real-time
-tail -f logs/llmama-client.log
+# View real-time logs
+make logs-server  # Server logs
+make logs-client  # Client logs
 
-# View error logs
-tail -f logs/error.log
+# Or manually
+tail -f server/logs/gridllm-server.log
+tail -f client/logs/gridllm-client.log
+tail -f client/logs/error.log
 ```
 
-## Development
+## Project Structure
 
-### Available Scripts
-- `npm run dev` - Start development server with hot reload
-- `npm run build` - Build for production
-- `npm start` - Start production server
-- `npm test` - Run tests (when implemented)
-- `npm run lint` - Lint code
-- `npm run lint:fix` - Fix linting issues
-
-### Project Structure
 ```
-src/
-├── config/           # Configuration management
-├── services/         # Core services (Ollama, Redis, Broker)
-├── middleware/       # Express middleware
-├── routes/           # API route handlers
-├── types/            # TypeScript type definitions
-├── utils/            # Utility functions
-└── index.ts          # Application entry point
+├── server/                 # Central coordinator server
+│   ├── src/
+│   │   ├── config/        # Server configuration
+│   │   ├── services/      # Core services (Redis, WorkerRegistry, JobScheduler)
+│   │   ├── routes/        # API endpoints (health, inference)
+│   │   ├── middleware/    # Express middleware
+│   │   └── index.ts       # Server entry point
+│   ├── package.json
+│   └── .env.example
+├── client/                 # Hot-join worker client
+│   ├── src/
+│   │   ├── config/        # Client configuration  
+│   │   ├── services/      # Worker services (Ollama, WorkerClient)
+│   │   ├── routes/        # Health endpoints
+│   │   └── index.ts       # Client entry point
+│   ├── package.json
+│   └── .env.example
+├── makefile               # Development automation
+└── README.md
 ```
 
-## Configuration
+## Production Deployment
 
-The application uses environment variables for configuration. See `.env.example` for all available options.
+### Using Docker
+
+```bash
+# Start with Docker Compose
+docker-compose up -d
+
+# Scale workers
+docker-compose up -d --scale client=3
+```
+
+### Manual Production
+
+```bash
+# Build for production
+make build
+
+# Start server (production mode)
+make start-server
+
+# Start workers (production mode)
+make start-client
+
+# Or manually
+cd server && npm start
+cd client && npm start
+```
+
+## API Reference
+
+### Inference API
+
+**POST** `/inference`
+```json
+{
+  "model": "llama3.2",
+  "prompt": "Your prompt here", 
+  "priority": "medium",
+  "timeout": 60000
+}
+```
+
+**GET** `/inference/models` - List all available models across workers
+
+**GET** `/inference/queue` - View job queue status
+
+### Health API
+
+**GET** `/health` - Server health status
+
+**GET** `/health/workers` - Connected workers status
+
+**GET** `/health/jobs` - Job processing status
 
 ## License
 
 MIT License - see LICENSE file for details.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature` 
+5. Open a Pull Request
