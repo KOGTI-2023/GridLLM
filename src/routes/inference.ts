@@ -42,7 +42,7 @@ export const inferenceRoutes = (brokerClient: BrokerClientService): Router => {
         throw createError('Broker client not connected', 503);
       }
 
-      // Check if model is available
+      // Check if model is available across the network
       const capabilities = brokerClient.getCapabilities();
       if (!capabilities) {
         throw createError('Worker capabilities not available', 503);
@@ -79,19 +79,28 @@ export const inferenceRoutes = (brokerClient: BrokerClientService): Router => {
         promptLength: inferenceRequest.prompt.length,
       });
 
-      // Add job to queue
-      await brokerClient.addJob(inferenceRequest);
+      // Submit job and wait for completion
+      const result = await brokerClient.submitAndWait(inferenceRequest);
 
-      res.status(202).json({
+      // Return the actual response from Ollama
+      res.status(200).json({
         id: inferenceRequest.id,
-        status: 'accepted',
-        message: 'Inference request queued successfully',
-        estimatedProcessingTime: '30-300 seconds',
+        model: result.model,
+        created_at: result.created_at,
+        response: result.response,
+        done: result.done,
+        context: result.context,
+        total_duration: result.total_duration,
+        load_duration: result.load_duration,
+        prompt_eval_count: result.prompt_eval_count,
+        prompt_eval_duration: result.prompt_eval_duration,
+        eval_count: result.eval_count,
+        eval_duration: result.eval_duration,
         timestamp: new Date().toISOString(),
       });
 
     } catch (error) {
-      logger.error('Failed to submit inference request', error);
+      logger.error('Failed to process inference request', error);
       
       if (error instanceof Error && (error as any).statusCode) {
         res.status((error as any).statusCode).json({

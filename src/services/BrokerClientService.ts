@@ -530,6 +530,17 @@ export class BrokerClientService extends EventEmitter {
         })
       );
 
+      // Publish result to specific job channel for synchronous waiting
+      await this.redisManager.publish(
+        `job:result:${request.id}`,
+        JSON.stringify({
+          jobId: request.id,
+          workerId: config.worker.id,
+          result,
+          timestamp: new Date().toISOString(),
+        })
+      );
+
       return result;
     } catch (error) {
       // Notify broker of failure
@@ -537,6 +548,17 @@ export class BrokerClientService extends EventEmitter {
         'job:failed',
         JSON.stringify({
           jobId: job.id,
+          workerId: config.worker.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+        })
+      );
+
+      // Publish error to specific job channel for synchronous waiting
+      await this.redisManager.publish(
+        `job:result:${request.id}`,
+        JSON.stringify({
+          jobId: request.id,
           workerId: config.worker.id,
           error: error instanceof Error ? error.message : 'Unknown error',
           timestamp: new Date().toISOString(),
@@ -660,6 +682,59 @@ export class BrokerClientService extends EventEmitter {
     }
     
     await this.workQueueService.addJob(request);
+  }
+
+  async submitAndWait(request: InferenceRequest): Promise<InferenceResponse> {
+    if (!this.workQueueService) {
+      throw new Error('Work queue service not available');
+    }
+
+    const workQueue = this.workQueueService; // Store reference to avoid null check issues
+
+    return new Promise(async (resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`Inference request timed out after ${request.timeout}ms`));
+      }, request.timeout);
+
+      try {
+        // Subscribe to job completion events for this specific request
+        const resultChannel = `job:result:${request.id}`;
+        
+        const handleResult = (message: string) => {
+          try {
+            const data = JSON.parse(message);
+            
+            if (data.jobId === request.id) {
+              clearTimeout(timeout);
+              this.redisManager.unsubscribe(resultChannel);
+              
+              if (data.error) {
+                reject(new Error(data.error));
+              } else {
+                resolve(data.result);
+              }
+            }
+          } catch (error) {
+            logger.error('Failed to parse job result', error);
+          }
+        };
+
+        // Subscribe to results before submitting the job
+        await this.redisManager.subscribe(resultChannel, handleResult);
+        
+        // Submit the job to the network
+        await workQueue.addJob(request);
+        
+        logger.info('Job submitted and waiting for result', {
+          id: request.id,
+          timeout: request.timeout,
+        });
+
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
   }
 }
 
