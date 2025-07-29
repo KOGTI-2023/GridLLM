@@ -14,7 +14,7 @@ const envSchema = Joi.object({
 	REDIS_PORT: Joi.number().default(6379),
 	REDIS_PASSWORD: Joi.string().allow("").default(""),
 	REDIS_DB: Joi.number().default(0),
-	REDIS_KEY_PREFIX: Joi.string().default("llmama:"),
+	REDIS_KEY_PREFIX: Joi.string().default("GridLLM:"),
 
 	// Server Configuration
 	SERVER_ID: Joi.string().default(
@@ -34,7 +34,7 @@ const envSchema = Joi.object({
 	LOG_LEVEL: Joi.string()
 		.valid("error", "warn", "info", "debug")
 		.default("info"),
-	LOG_FILE_PATH: Joi.string().default("./logs/llmama-server.log"),
+	LOG_FILE_PATH: Joi.string().default("./logs/GridLLM-server.log"),
 	HEALTH_CHECK_INTERVAL: Joi.number().default(60000),
 
 	// Rate Limiting

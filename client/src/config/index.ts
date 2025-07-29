@@ -14,7 +14,7 @@ const envSchema = Joi.object({
 	REDIS_PORT: Joi.number().default(6379),
 	REDIS_PASSWORD: Joi.string().allow("").default(""),
 	REDIS_DB: Joi.number().default(0),
-	REDIS_KEY_PREFIX: Joi.string().default("llmama:"),
+	REDIS_KEY_PREFIX: Joi.string().default("GridLLM:"),
 
 	// Ollama Configuration
 	OLLAMA_HOST: Joi.string().default("localhost"),
@@ -52,7 +52,7 @@ const envSchema = Joi.object({
 	LOG_LEVEL: Joi.string()
 		.valid("error", "warn", "info", "debug")
 		.default("info"),
-	LOG_FILE_PATH: Joi.string().default("./logs/llmama-client.log"),
+	LOG_FILE_PATH: Joi.string().default("./logs/GridLLM-client.log"),
 	METRICS_ENABLED: Joi.boolean().default(true),
 	HEALTH_CHECK_INTERVAL: Joi.number().default(60000),
 

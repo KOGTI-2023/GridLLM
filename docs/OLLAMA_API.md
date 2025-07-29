@@ -1,6 +1,6 @@
-# LLMama Server - Ollama API Compatibility
+# GridLLM Server - Ollama API Compatibility
 
-The LLMama server provides a complete Ollama API-compatible interface under the `/ollama` route. This allows existing Ollama clients and applications to work seamlessly with LLMama's distributed inference system.
+The GridLLM server provides a complete Ollama API-compatible interface under the `/ollama` route. This allows existing Ollama clients and applications to work seamlessly with GridLLM's distributed inference system.
 
 ## Base URL
 
@@ -10,7 +10,7 @@ All Ollama API endpoints are available under:
 http://[host]:[port]/ollama
 ```
 
-For example, if your LLMama server is running on `localhost:3001`, the Ollama API base would be:
+For example, if your GridLLM server is running on `localhost:3001`, the Ollama API base would be:
 
 ```
 http://localhost:3001/ollama
@@ -144,7 +144,7 @@ curl http://localhost:3001/ollama/api/embed -d '{
 
 ## Distributed Features
 
-While maintaining full Ollama API compatibility, LLMama adds distributed system capabilities:
+While maintaining full Ollama API compatibility, GridLLM adds distributed system capabilities:
 
 - **Load Balancing**: Requests are automatically distributed across available workers
 - **Model Availability**: Models available on any worker in the network are accessible
@@ -153,7 +153,7 @@ While maintaining full Ollama API compatibility, LLMama adds distributed system 
 
 ## Streaming Responses
 
-LLMama supports Ollama's streaming protocol:
+GridLLM supports Ollama's streaming protocol:
 
 - Set `"stream": true` for real-time token streaming
 - Responses are sent as newline-delimited JSON
@@ -177,15 +177,15 @@ Models are managed across the distributed worker network:
 
 ## Integration
 
-To migrate from Ollama to LLMama:
+To migrate from Ollama to GridLLM:
 
-1. Change your base URL from `http://localhost:11434` to `http://[llmama-server]:[port]/ollama`
+1. Change your base URL from `http://localhost:11434` to `http://[GridLLM-server]:[port]/ollama`
 2. All existing Ollama client code works without modification
 3. Benefit from distributed inference capabilities
 
 ## Performance
 
-LLMama's distributed architecture provides:
+GridLLM's distributed architecture provides:
 
 - Higher throughput through parallel processing
 - Better resource utilization across multiple machines

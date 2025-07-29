@@ -1,7 +1,7 @@
 {
-	"name": "llmama-server",
+	"name": "GridLLM-server",
 	"version": "1.0.0",
-	"description": "Central LLMama server for managing distributed AI inference workers",
+	"description": "Central GridLLM server for managing distributed AI inference workers",
 	"main": "dist/index.js",
 	"scripts": {
 		"dev": "tsx watch src/index.ts",

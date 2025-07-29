@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 
 // Ensure logs directory exists
-const logDir = path.dirname("./logs/llmama-server.log");
+const logDir = path.dirname("./logs/GridLLM-server.log");
 if (!fs.existsSync(logDir)) {
 	fs.mkdirSync(logDir, { recursive: true });
 }
@@ -52,7 +52,9 @@ const logFormat = winston.format.combine(
 			try {
 				logMessage += `\n${safeStringify(meta, 2)}`;
 			} catch (error) {
-				logMessage += `\n[Error serializing metadata: ${error instanceof Error ? error.message : "Unknown error"}]`;
+				logMessage += `\n[Error serializing metadata: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}]`;
 			}
 		}
 
@@ -64,7 +66,7 @@ const logFormat = winston.format.combine(
 const baseLogger = winston.createLogger({
 	level: process.env.LOG_LEVEL || "info",
 	format: logFormat,
-	defaultMeta: { service: "llmama-server" },
+	defaultMeta: { service: "GridLLM-server" },
 	transports: [
 		new winston.transports.File({
 			filename: "./logs/error.log",
@@ -73,7 +75,7 @@ const baseLogger = winston.createLogger({
 			maxFiles: 5,
 		}),
 		new winston.transports.File({
-			filename: "./logs/llmama-server.log",
+			filename: "./logs/GridLLM-server.log",
 			maxsize: 5242880, // 5MB
 			maxFiles: 5,
 		}),

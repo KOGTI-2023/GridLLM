@@ -1,4 +1,4 @@
-# LLMama - Distributed AI Inference Network
+# GridLLM - Distributed AI Inference Network
 
 A distributed AI inference system with hot-join capability, designed for dynamic worker pools. Perfect for adding your MacBook or other machines to a shared AI compute network when available.
 
@@ -20,7 +20,7 @@ The system is designed for dynamic worker participation:
 
 ### Ollama API Compatibility
 
-LLMama provides **full Ollama API compatibility** under the `/ollama` route:
+GridLLM provides **full Ollama API compatibility** under the `/ollama` route:
 
 - Use existing Ollama clients without modification
 - All Ollama endpoints supported (`/api/generate`, `/api/chat`, `/api/tags`, etc.)
@@ -124,7 +124,7 @@ Workers automatically:
 
 Send requests to the server (not individual workers):
 
-#### Using LLMama Native API
+#### Using GridLLM Native API
 
 ```bash
 # Basic inference request

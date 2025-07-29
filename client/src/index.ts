@@ -60,7 +60,7 @@ class WorkerApplication {
 			const capabilities = this.workerClient.getCapabilities();
 
 			res.json({
-				name: "LLMama Worker",
+				name: "GridLLM Worker",
 				version: "1.0.0",
 				status: "running",
 				workerId: config.worker.id,

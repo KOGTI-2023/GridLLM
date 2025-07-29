@@ -200,10 +200,52 @@ export class WorkerRegistry extends EventEmitter {
 
 				this.emit("worker_heartbeat", worker);
 			} else {
-				logger.worker(
-					data.workerId,
-					"Received heartbeat from unknown worker"
+				// Worker not in memory, check if it exists in Redis
+				const workerData = await this.redis.hget(
+					"workers",
+					data.workerId
 				);
+
+				if (workerData) {
+					// Worker exists in Redis but not in memory, load it
+					try {
+						const workerInfo = JSON.parse(workerData) as WorkerInfo;
+						workerInfo.lastHeartbeat = new Date(data.timestamp);
+						workerInfo.status = data.status || "online";
+						workerInfo.currentJobs = data.currentJobs || 0;
+						workerInfo.connectionHealth =
+							data.connectionHealth || "healthy";
+
+						this.workers.set(data.workerId, workerInfo);
+
+						// Update in Redis with fresh heartbeat
+						await this.redis.hset(
+							"workers",
+							data.workerId,
+							JSON.stringify(workerInfo)
+						);
+
+						this.emit("worker_heartbeat", workerInfo);
+						logger.worker(
+							data.workerId,
+							"Re-loaded worker from Redis on heartbeat"
+						);
+					} catch (parseError) {
+						logger.error(
+							`Failed to parse worker data from Redis for ${data.workerId}`,
+							parseError
+						);
+						// Send re-registration request
+						await this.requestWorkerReregistration(data.workerId);
+					}
+				} else {
+					// Worker not in Redis either, request re-registration
+					logger.worker(
+						data.workerId,
+						"Received heartbeat from unknown worker, requesting re-registration"
+					);
+					await this.requestWorkerReregistration(data.workerId);
+				}
 			}
 		} catch (error) {
 			logger.error("Failed to handle worker heartbeat", error);
@@ -364,5 +406,26 @@ export class WorkerRegistry extends EventEmitter {
 		}
 
 		return Array.from(models);
+	}
+
+	private async requestWorkerReregistration(workerId: string): Promise<void> {
+		try {
+			// Send a re-registration request to the worker
+			await this.redis.publish(
+				`worker:reregister:${workerId}`,
+				JSON.stringify({
+					workerId,
+					timestamp: new Date().toISOString(),
+					reason: "unknown_worker_heartbeat",
+				})
+			);
+
+			logger.worker(workerId, "Sent re-registration request to worker");
+		} catch (error) {
+			logger.error(
+				`Failed to send re-registration request to worker ${workerId}`,
+				error
+			);
+		}
 	}
 }

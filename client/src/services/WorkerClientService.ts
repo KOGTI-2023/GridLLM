@@ -21,6 +21,11 @@ export class WorkerClientService extends EventEmitter {
 	private capabilities: NodeCapabilities | null = null;
 	private currentJobs: number = 0;
 	private isProcessingJob: boolean = false;
+	private lastPublishedStatus: {
+		status: string;
+		currentJobs: number;
+		systemResources?: any;
+	} | null = null;
 
 	constructor() {
 		super();
@@ -240,7 +245,13 @@ export class WorkerClientService extends EventEmitter {
 				this.handleJobMessage.bind(this)
 			);
 
-			logger.info("Subscribed to job channel");
+			// Subscribe to re-registration requests
+			await this.redisManager.subscribe(
+				`worker:reregister:${config.worker.id}`,
+				this.handleReregistrationRequest.bind(this)
+			);
+
+			logger.info("Subscribed to job and reregistration channels");
 		} catch (error) {
 			logger.error("Failed to subscribe to job channel", error);
 			throw error;
@@ -259,6 +270,9 @@ export class WorkerClientService extends EventEmitter {
 			// Unsubscribe from channels
 			await this.redisManager.unsubscribe(
 				`worker:${config.worker.id}:job`
+			);
+			await this.redisManager.unsubscribe(
+				`worker:reregister:${config.worker.id}`
 			);
 
 			logger.info("Disconnected from server");
@@ -402,30 +416,135 @@ export class WorkerClientService extends EventEmitter {
 			this.capabilities.systemResources = systemResources;
 			this.capabilities.lastUpdated = new Date();
 
-			// Update server with new capabilities
+			const currentStatus = this.isProcessingJob ? "busy" : "online";
+			const currentStatusData = {
+				status: currentStatus,
+				currentJobs: this.currentJobs,
+				systemResources,
+			};
+
+			// Check if status has actually changed
+			const hasStatusChanged =
+				!this.lastPublishedStatus ||
+				this.lastPublishedStatus.status !== currentStatus ||
+				this.lastPublishedStatus.currentJobs !== this.currentJobs ||
+				this.hasSystemResourcesChanged(
+					this.lastPublishedStatus.systemResources,
+					systemResources
+				);
+
+			if (!hasStatusChanged) {
+				// Only update capabilities in Redis without publishing status update
+				await this.redisManager.hset(
+					"workers",
+					config.worker.id,
+					JSON.stringify({
+						workerId: config.worker.id,
+						capabilities: this.capabilities,
+						status: currentStatus,
+						lastUpdated: new Date().toISOString(),
+					})
+				);
+				return;
+			}
+
+			// Status has changed, publish the update
 			await this.redisManager.hset(
 				"workers",
 				config.worker.id,
 				JSON.stringify({
 					workerId: config.worker.id,
 					capabilities: this.capabilities,
-					status: this.isProcessingJob ? "busy" : "online",
+					status: currentStatus,
 					lastUpdated: new Date().toISOString(),
 				})
 			);
 
-			// Publish status update
+			// Publish status update only when something meaningful changed
 			await this.redisManager.publish(
 				"worker:status_update",
 				JSON.stringify({
 					workerId: config.worker.id,
-					status: this.isProcessingJob ? "busy" : "online",
+					status: currentStatus,
 					currentJobs: this.currentJobs,
 					systemResources,
 				})
 			);
+
+			// Update the last published status
+			this.lastPublishedStatus = { ...currentStatusData };
+
+			logger.debug("Worker status published due to meaningful change", {
+				workerId: config.worker.id,
+				status: currentStatus,
+				currentJobs: this.currentJobs,
+			});
 		} catch (error) {
 			logger.error("Failed to update capabilities", error);
+		}
+	}
+
+	private hasSystemResourcesChanged(
+		oldResources: any,
+		newResources: any
+	): boolean {
+		if (!oldResources && !newResources) return false;
+		if (!oldResources || !newResources) return true;
+
+		// Check for significant changes in system resources
+		// Only consider meaningful differences (e.g., >5% change in memory/CPU)
+		const threshold = 0.05; // 5% threshold
+
+		if (oldResources.memory && newResources.memory) {
+			const memDiff =
+				Math.abs(oldResources.memory.used - newResources.memory.used) /
+				oldResources.memory.total;
+			if (memDiff > threshold) return true;
+		}
+
+		if (oldResources.cpu && newResources.cpu) {
+			const cpuDiff = Math.abs(
+				oldResources.cpu.usage - newResources.cpu.usage
+			);
+			if (cpuDiff > threshold * 100) return true; // CPU is in percentage
+		}
+
+		return false;
+	}
+
+	private async publishStatusUpdate(): Promise<void> {
+		if (!this.capabilities) return;
+
+		try {
+			const systemResources =
+				await this.ollamaService.getSystemResources();
+			const currentStatus = this.isProcessingJob ? "busy" : "online";
+
+			// Always publish when explicitly called (for job state changes)
+			await this.redisManager.publish(
+				"worker:status_update",
+				JSON.stringify({
+					workerId: config.worker.id,
+					status: currentStatus,
+					currentJobs: this.currentJobs,
+					systemResources,
+				})
+			);
+
+			// Update the last published status
+			this.lastPublishedStatus = {
+				status: currentStatus,
+				currentJobs: this.currentJobs,
+				systemResources,
+			};
+
+			logger.debug("Worker status published", {
+				workerId: config.worker.id,
+				status: currentStatus,
+				currentJobs: this.currentJobs,
+			});
+		} catch (error) {
+			logger.error("Failed to publish status update", error);
 		}
 	}
 
@@ -467,6 +586,9 @@ export class WorkerClientService extends EventEmitter {
 
 		this.isProcessingJob = true;
 		this.currentJobs = 1;
+
+		// Immediately publish status change to busy
+		await this.publishStatusUpdate();
 
 		try {
 			logger.info("Processing job assignment", {
@@ -572,6 +694,9 @@ export class WorkerClientService extends EventEmitter {
 		} finally {
 			this.isProcessingJob = false;
 			this.currentJobs = 0;
+
+			// Immediately publish status change to idle
+			await this.publishStatusUpdate();
 		}
 	}
 
@@ -579,6 +704,23 @@ export class WorkerClientService extends EventEmitter {
 		logger.info("Job cancellation requested", { jobId });
 		// In a real implementation, you'd cancel the running job
 		// For now, just log it
+	}
+
+	private async handleReregistrationRequest(message: string): Promise<void> {
+		try {
+			const data = JSON.parse(message);
+			logger.info("Received re-registration request from server", {
+				workerId: data.workerId,
+				reason: data.reason,
+			});
+
+			// Re-register with the server
+			await this.registerWithServer();
+
+			logger.info("Re-registration completed successfully");
+		} catch (error) {
+			logger.error("Failed to handle re-registration request", error);
+		}
 	}
 
 	// Public methods

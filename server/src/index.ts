@@ -12,7 +12,7 @@ import { inferenceRoutes } from "@/routes/inference";
 import { ollamaRoutes } from "@/routes/ollama";
 import { errorHandler, notFoundHandler } from "@/middleware/errorHandler";
 
-class LLMamaServer {
+class GridLLMServer {
 	private app: express.Application;
 	private server: any;
 	private redis: RedisService;
@@ -81,7 +81,7 @@ class LLMamaServer {
 		// Root endpoint
 		this.app.get("/", (req, res) => {
 			res.json({
-				name: "LLMama Server",
+				name: "GridLLM Server",
 				version: "1.0.0",
 				status: "running",
 				serverId: config.server.id,
@@ -196,7 +196,7 @@ class LLMamaServer {
 
 	async start(): Promise<void> {
 		try {
-			logger.info("Starting LLMama Server", {
+			logger.info("Starting GridLLM Server", {
 				serverId: config.server.id,
 				environment: config.env,
 				port: config.port,
@@ -216,7 +216,7 @@ class LLMamaServer {
 
 			// Start HTTP server
 			this.server = this.app.listen(config.port, () => {
-				logger.info("LLMama Server started successfully", {
+				logger.info("GridLLM Server started successfully", {
 					port: config.port,
 					serverId: config.server.id,
 					environment: config.env,
@@ -252,13 +252,13 @@ class LLMamaServer {
 				});
 			}, 60000); // Every minute
 		} catch (error) {
-			logger.error("Failed to start LLMama Server", error);
+			logger.error("Failed to start GridLLM Server", error);
 			throw error;
 		}
 	}
 
 	async shutdown(exitCode: number = 0): Promise<void> {
-		logger.info("Shutting down LLMama Server", { exitCode });
+		logger.info("Shutting down GridLLM Server", { exitCode });
 
 		try {
 			// Stop accepting new connections
@@ -280,7 +280,7 @@ class LLMamaServer {
 			await this.redis.disconnect();
 			logger.info("Redis disconnected");
 
-			logger.info("LLMama Server shutdown complete");
+			logger.info("GridLLM Server shutdown complete");
 			process.exit(exitCode);
 		} catch (error) {
 			logger.error("Error during shutdown", error);
@@ -307,12 +307,12 @@ class LLMamaServer {
 
 // Start the server if this file is run directly
 if (require.main === module) {
-	const server = new LLMamaServer();
+	const server = new GridLLMServer();
 
 	server.start().catch((error) => {
-		logger.error("Failed to start LLMama Server", error);
+		logger.error("Failed to start GridLLM Server", error);
 		process.exit(1);
 	});
 }
 
-export default LLMamaServer;
+export default GridLLMServer;
