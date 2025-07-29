@@ -1,175 +1,116 @@
-# GridLLM - Distributed AI Inference Network
+# GridLLM - Distributed AI Inference System
 
-A distributed AI inference system with hot-join capability, designed for dynamic worker pools. Perfect for adding your MacBook or other machines to a shared AI compute network when available.
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3%2B-blue.svg)](https://www.typescriptlang.org/)
 
-## Architecture
+GridLLM is a **distributed AI inference system** that enables horizontal scaling of large language model (LLM) processing across multiple workers. It provides a centralized server that coordinates AI inference requests across a network of worker nodes, offering **Ollama API compatibility** and **intelligent load balancing**.
 
-This repository contains a complete server/client architecture:
+## Architecture Overview
 
-- **Server** (`/server`) - Central coordinator that manages workers and distributes inference jobs
-- **Client** (`/client`) - Hot-joinable worker that provides local Ollama compute resources
+GridLLM consists of three main components:
 
-### Hot-Join Design Philosophy
+### 1. **Central Server** (`/server`)
 
-The system is designed for dynamic worker participation:
+-   **Job Scheduling**: Intelligently distributes inference requests across available workers
+-   **Worker Registry**: Tracks worker capabilities, status, and performance metrics
+-   **Load Balancing**: Routes requests to optimal workers based on model availability and load
+-   **API Gateway**: Provides both native and Ollama-compatible API endpoints
+-   **Health Monitoring**: Continuous health checks and worker status management
 
-- **Central Server**: Always-on coordinator that receives inference requests and manages job distribution
-- **Worker Clients**: Can join/leave the network at any time without disrupting the system
-- **Intelligent Job Routing**: Server automatically routes jobs to available workers based on model availability and current load
-- **Graceful Disconnection**: Workers finish current jobs before leaving the network
+### 2. **Worker Clients** (`/client`)
 
-### Ollama API Compatibility
+-   **Ollama Integration**: Connects to local Ollama instances for model inference
+-   **Capability Detection**: Automatically discovers available models and system resources
+-   **Job Processing**: Handles inference requests from the central server
+-   **Performance Tiering**: Self-classifies into high/medium/low performance tiers
+-   **Auto-Registration**: Automatically registers with the central server
 
-GridLLM provides **full Ollama API compatibility** under the `/ollama` route:
+## Key Features
 
-- Use existing Ollama clients without modification
-- All Ollama endpoints supported (`/api/generate`, `/api/chat`, `/api/tags`, etc.)
-- Transparent load balancing across distributed workers
-- See [Ollama API Documentation](docs/OLLAMA_API.md) for complete details
+### **Distributed Architecture**
 
-## Prerequisites
+-   **Horizontal Scaling**: Add more workers to increase capacity
+-   **Fault Tolerance**: Automatic failover when workers become unavailable
+-   **Load Balancing**: Intelligent request distribution based on worker capabilities
+-   **Real-time Monitoring**: Live tracking of worker status and job queues
 
-### For the Central Server (Always-On Machine)
+### **Ollama API Compatibility**
 
-- **Node.js** (v18 or higher)
-- **Redis** server
-- **npm** package manager
+-   **Drop-in Replacement**: Compatible with existing Ollama clients
+-   **Complete API Coverage**: All Ollama endpoints supported (`/ollama/*`)
+-   **Streaming Support**: Real-time token streaming for chat applications
+-   **Model Management**: Distributed model availability across workers
 
-### For Worker Clients (Hot-Join Machines)
+### **Advanced Job Scheduling**
 
-- **Node.js** (v18 or higher)
-- **Ollama** installed and running locally
-- **npm** package manager
+-   **Priority Queues**: High/medium/low priority job processing
+-   **Timeout Management**: Configurable timeouts with automatic cleanup
+-   **Worker Selection**: Optimal worker assignment based on:
+    -   Model availability
+    -   Current load
+    -   Performance tier
+    -   Resource utilization
+
+### **Enterprise Ready**
+
+-   **Redis Integration**: Robust job queuing with BullMQ
+-   **Authentication**: JWT and API key support
+-   **Rate Limiting**: Configurable request throttling
+-   **Comprehensive Logging**: Structured logging with Winston
+-   **Health Endpoints**: Detailed system status monitoring
 
 ## Installation
 
-### Install Dependencies
+### Prerequisites
+
+-   **Node.js 18+**
+-   **Redis Server** (for job queuing)
+-   **Ollama** (installed on worker nodes)
+-   **npm** or **yarn**
+
+### Quick Start
+
+1. **Clone the repository**
 
 ```bash
-# Install all dependencies (recommended)
+git clone https://github.com/jwstanwick/GridLLM.git
+cd GridLLM
+```
+
+2. **Install dependencies for both server and client**
+
+```bash
 make install
-
-# Or install manually
-cd server && npm install
-cd ../client && npm install
 ```
 
-### Install Prerequisites
-
-#### Redis (Server Machine Only)
+3. **Set up environment configuration**
 
 ```bash
-# macOS (using Homebrew)
-brew install redis
-brew services start redis
+# Copy example environment files
+cp server/.env.example server/.env
+cp client/.env.example client/.env
 
-# Or using Docker
-docker run -d -p 6379:6379 --name gridllm-redis redis:7-alpine
+# Edit configuration files as needed
+nano server/.env
+nano client/.env
 ```
 
-#### Ollama (Worker Machines)
+4. **Start Redis server** (if not already running)
 
 ```bash
-# macOS
-curl -fsSL https://ollama.com/install.sh | sh
-
-# Start Ollama service
-ollama serve
-
-# Pull some models
-ollama pull llama3.2
-ollama pull qwen2.5
+redis-server
 ```
 
-## Quick Start
-
-### 1. Start the Central Server
+5. **Start the central server**
 
 ```bash
-# Using Makefile (recommended)
 make run-server
-
-# Or manually
-cd server
-cp .env.example .env
-npm run dev
 ```
 
-The server starts on port 4000 by default and provides:
-
-- Inference API at `http://localhost:4000/inference`
-- **Ollama API at `http://localhost:4000/ollama`** (full compatibility)
-- Health monitoring at `http://localhost:4000/health`
-- Worker management endpoints
-
-### 2. Start Worker Clients
+6. **Start worker clients** (on each machine with Ollama)
 
 ```bash
-# Using Makefile (recommended)
 make run-client
-
-# Or manually
-cd client
-cp .env.example .env
-npm run dev
-```
-
-Workers automatically:
-
-- Connect to the server
-- Register available Ollama models
-- Start processing assigned jobs
-
-### 3. Submit Inference Requests
-
-Send requests to the server (not individual workers):
-
-#### Using GridLLM Native API
-
-```bash
-# Basic inference request
-curl -X POST http://localhost:4000/inference \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "llama3.2",
-    "prompt": "Explain quantum computing in simple terms",
-    "priority": "medium"
-  }'
-
-# Check available models across all workers
-curl http://localhost:4000/inference/models
-
-# Check worker status
-curl http://localhost:4000/health/workers
-```
-
-#### Using Ollama-Compatible API
-
-```bash
-# Generate text completion (just like Ollama!)
-curl http://localhost:4000/ollama/api/generate -d '{
-  "model": "llama3.2",
-  "prompt": "Why is the sky blue?",
-  "stream": false
-}'
-
-# Chat completion
-curl http://localhost:4000/ollama/api/chat -d '{
-  "model": "llama3.2",
-  "messages": [
-    {"role": "user", "content": "Hello!"}
-  ],
-  "stream": false
-}'
-
-# List available models
-curl http://localhost:4000/ollama/api/tags
-
-# Generate embeddings
-curl http://localhost:4000/ollama/api/embed -d '{
-  "model": "all-minilm",
-  "input": "Hello world"
-}'
 ```
 
 ## Configuration
@@ -178,278 +119,162 @@ curl http://localhost:4000/ollama/api/embed -d '{
 
 ```env
 # Server Settings
+NODE_ENV=development
 PORT=4000
 SERVER_ID=gridllm-server-1
 
 # Redis Configuration
 REDIS_HOST=localhost
 REDIS_PORT=6379
+REDIS_PASSWORD=
 
-# Worker Management
-WORKER_HEARTBEAT_TIMEOUT=60000
-MAX_CONCURRENT_JOBS_PER_WORKER=1
+# Security
+CORS_ORIGIN=*
+API_KEY_ENABLED=false
+JWT_SECRET=your-secret-key
 
-# Logging
-LOG_LEVEL=info
+# Job Processing
+DEFAULT_JOB_TIMEOUT=300000
+MAX_CONCURRENT_JOBS=100
+WORKER_HEARTBEAT_INTERVAL=30000
 ```
 
-### Client Configuration (`client/.env`)
+### Worker Configuration (`client/.env`)
 
 ```env
 # Worker Settings
-PORT=3002
-WORKER_ID=macbook-worker-001
+NODE_ENV=development
+PORT=3000
+WORKER_ID=worker-1
 
 # Server Connection
-SERVER_REDIS_HOST=localhost
-SERVER_REDIS_PORT=6379
+SERVER_HOST=localhost
+SERVER_PORT=4000
 
 # Ollama Configuration
 OLLAMA_HOST=localhost
 OLLAMA_PORT=11434
 
-# Resource Limits
-MAX_CONCURRENT_JOBS=1
-HEARTBEAT_INTERVAL=30000
-
-# Logging
-LOG_LEVEL=info
+# Performance
+MAX_CONCURRENT_TASKS=3
+PERFORMANCE_TIER=auto
 ```
 
-## Development Workflow
+## 🛠️ Development Commands
 
-### Using the Makefile (Recommended)
+GridLLM includes a comprehensive Makefile for development:
 
 ```bash
-# Install all dependencies
-make install
+# Installation
+make install          # Install all dependencies
+make install-server   # Install server dependencies only
+make install-client   # Install client dependencies only
 
-# Start the server
-make run-server
+# Development
+make run-server       # Start server in development mode
+make run-client       # Start client in development mode
 
-# Start a worker client (in another terminal)
-make run-client
+# Building
+make build-server     # Build server for production
+make build-client     # Build client for production
 
-# Check system status
-make status
+# Utilities
+make logs-server      # View server logs
+make logs-client      # View client logs
+make clean           # Clean build artifacts and logs
+make test            # Run test suites
+make format          # Format code with Prettier
+make status          # Check system status
 
-# View logs
-make logs-server
-make logs-client
-
-# Stop all processes
-make stop
-
-# Clean build artifacts
-make clean
-
-# Build for production
-make build
+# Setup
+make setup           # Complete development environment setup
 ```
 
-### Manual Development (Alternative)
+## API Usage
+
+### Native GridLLM API
+
+#### Submit Inference Request
 
 ```bash
-# Server development
-cd server && npm run dev
-
-# Client development
-cd client && npm run dev
-
-# Build for production
-cd server && npm run build && npm start
-cd client && npm run build && npm start
+curl -X POST http://localhost:4000/inference \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama3.2",
+    "prompt": "Explain quantum computing",
+    "priority": "high",
+    "stream": false
+  }'
 ```
 
-## Hot-Join Usage Examples
-
-### Scenario 1: Adding Your MacBook to the Pool
+#### Check Job Status
 
 ```bash
-# When you want to contribute compute power
-make run-client
-
-# Monitor your worker's status
-curl http://localhost:3002/health
-
-# When you need your MacBook back
-# Ctrl+C (worker gracefully finishes current job)
+curl http://localhost:4000/inference/{job-id}/status
 ```
 
-### Scenario 2: Multi-Worker Setup
+#### List Available Models
 
 ```bash
-# Terminal 1: Start server
-make run-server
-
-# Terminal 2: Start worker 1 (MacBook)
-WORKER_ID=macbook-worker make run-client
-
-# Terminal 3: Start worker 2 (Desktop)
-WORKER_ID=desktop-worker PORT=3003 make run-client
-
-# Check all workers
-curl http://localhost:4000/health/workers
-```
-
-## Monitoring and Management
-
-### Server Health Endpoints
-
-```bash
-# Overall server status
-curl http://localhost:4000/health
-
-# Connected workers
-curl http://localhost:4000/health/workers
-
-# Job queue status
-curl http://localhost:4000/health/jobs
-
-# Available models across all workers
 curl http://localhost:4000/inference/models
 ```
 
-### Worker Health Endpoints
+#### View Queue Statistics
 
 ```bash
-# Worker status
-curl http://localhost:3002/health
-
-# Worker capabilities
-curl http://localhost:3002/health/capabilities
-
-# Current jobs
-curl http://localhost:3002/health/jobs
+curl http://localhost:4000/inference/queue
 ```
 
-## Troubleshooting
+### Ollama-Compatible API
 
-### Common Issues
-
-**1. "Model not available on any worker"**
-
-- Ensure at least one worker is connected: `curl http://localhost:4000/health/workers`
-- Check if worker has the requested model: `curl http://localhost:3002/health/capabilities`
-- Verify Ollama is running: `ollama list`
-
-**2. Worker connection failures**
-
-- Check Redis is running: `redis-cli ping`
-- Verify Redis connection settings in `.env`
-- Check server logs: `make logs-server`
-
-**3. Port conflicts**
-
-- Change ports in `.env` files
-- Or kill conflicting processes: `lsof -ti:PORT | xargs kill`
-
-**4. Ollama connection errors**
-
-- Ensure Ollama is running: `curl http://localhost:11434/api/version`
-- Check Ollama host/port in client `.env`
-
-### Logs
+#### Generate Completion
 
 ```bash
-# View real-time logs
-make logs-server  # Server logs
-make logs-client  # Client logs
-
-# Or manually
-tail -f server/logs/gridllm-server.log
-tail -f client/logs/gridllm-client.log
-tail -f client/logs/error.log
+curl -X POST http://localhost:4000/ollama/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama3.2",
+    "prompt": "What is the capital of France?",
+    "stream": false
+  }'
 ```
 
-## Project Structure
-
-```
-├── server/                 # Central coordinator server
-│   ├── src/
-│   │   ├── config/        # Server configuration
-│   │   ├── services/      # Core services (Redis, WorkerRegistry, JobScheduler)
-│   │   ├── routes/        # API endpoints (health, inference)
-│   │   ├── middleware/    # Express middleware
-│   │   └── index.ts       # Server entry point
-│   ├── package.json
-│   └── .env.example
-├── client/                 # Hot-join worker client
-│   ├── src/
-│   │   ├── config/        # Client configuration
-│   │   ├── services/      # Worker services (Ollama, WorkerClient)
-│   │   ├── routes/        # Health endpoints
-│   │   └── index.ts       # Client entry point
-│   ├── package.json
-│   └── .env.example
-├── makefile               # Development automation
-└── README.md
-```
-
-## Production Deployment
-
-### Using Docker
+#### Chat Completion
 
 ```bash
-# Start with Docker Compose
-docker-compose up -d
-
-# Scale workers
-docker-compose up -d --scale client=3
+curl -X POST http://localhost:4000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama3.2",
+    "messages": [
+      {"role": "user", "content": "Hello!"}
+    ],
+    "stream": false
+  }'
 ```
 
-### Manual Production
+#### List Models
 
 ```bash
-# Build for production
-make build
-
-# Start server (production mode)
-make start-server
-
-# Start workers (production mode)
-make start-client
-
-# Or manually
-cd server && npm start
-cd client && npm start
+curl http://localhost:4000/ollama/api/tags
 ```
 
-## API Reference
+## Architecture Deep Dive
 
-### Inference API
+### Job Flow
 
-**POST** `/inference`
+1. **Request Reception**: Client submits inference request to server
+2. **Validation**: Server validates request and checks model availability
+3. **Worker Selection**: Intelligent worker selection based on:
+    - Model availability
+    - Current load
+4. **Job Assignment**: Request is queued and assigned to optimal worker
+5. **Processing**: Worker processes inference via local Ollama
+6. **Response**: Result is returned through the server to client
 
-```json
-{
-	"model": "llama3.2",
-	"prompt": "Your prompt here",
-	"priority": "medium",
-	"timeout": 60000
-}
-```
+### Worker Registration
 
-**GET** `/inference/models` - List all available models across workers
-
-**GET** `/inference/queue` - View job queue status
-
-### Health API
-
-**GET** `/health` - Server health status
-
-**GET** `/health/workers` - Connected workers status
-
-**GET** `/health/jobs` - Job processing status
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+1. **Capability Detection**: Worker scans local Ollama for available models
+2. **Resource Assessment**: System resources are evaluated for performance tiering
+3. **Server Registration**: Worker registers capabilities with central server
+4. **Heartbeat**: Continuous health monitoring and status updates

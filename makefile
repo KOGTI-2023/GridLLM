@@ -1,5 +1,5 @@
 # GridLLM Development Scripts
-.PHONY: help install install-server install-client run-server run-client build-server build-client clean logs-server logs-client test docker-up docker-down
+.PHONY: help install install-server install-client run-server run-client build-server build-client clean logs-server logs-client test
 
 # Default target
 help:
@@ -23,10 +23,6 @@ help:
 	@echo "    logs-client     - View client logs"
 	@echo "    clean          - Clean build artifacts and logs"
 	@echo "    test           - Run tests"
-	@echo ""
-	@echo "  Docker Commands:"
-	@echo "    docker-up      - Start Redis and server with Docker"
-	@echo "    docker-down    - Stop Docker services"
 
 # Installation commands
 install: install-server install-client
@@ -78,17 +74,6 @@ test:
 	@echo "Running tests..."
 	npm test
 	cd server && npm test
-
-# Docker commands
-docker-up:
-	@echo "Starting Redis and GridLLM Server with Docker..."
-	docker-compose up -d
-	@echo "Server available at http://localhost:4000"
-	@echo "Redis available at localhost:6379"
-
-docker-down:
-	@echo "Stopping Docker services..."
-	docker-compose down
 
 # Quick status check
 status:
