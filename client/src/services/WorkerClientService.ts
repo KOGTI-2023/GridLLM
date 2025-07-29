@@ -3,26 +3,24 @@ import { config } from '@/config';
 import { logger } from '@/utils/logger';
 import { RedisConnectionManager } from './RedisConnectionManager';
 import { OllamaService } from './OllamaService';
-import { WorkQueueService } from './WorkQueueService';
 import { 
   NodeCapabilities, 
   WorkerStatus, 
-  BrokerConnection, 
   SystemResources,
   InferenceRequest,
   InferenceResponse
 } from '@/types';
-import { Job } from 'bullmq';
 
-export class BrokerClientService extends EventEmitter {
+export class WorkerClientService extends EventEmitter {
   private redisManager: RedisConnectionManager;
   private ollamaService: OllamaService;
-  private workQueueService: WorkQueueService | null = null;
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private resourceCheckInterval: NodeJS.Timeout | null = null;
   private capabilities: NodeCapabilities | null = null;
+  private currentJobs: number = 0;
+  private isProcessingJob: boolean = false;
 
   constructor() {
     super();
@@ -32,9 +30,9 @@ export class BrokerClientService extends EventEmitter {
 
   async initialize(): Promise<void> {
     try {
-      logger.info('Initializing broker client service');
+      logger.info('Initializing worker client service');
 
-      // Connect to Redis
+      // Connect to server's Redis
       await this.redisManager.connect();
       
       // Check Ollama health
@@ -45,37 +43,27 @@ export class BrokerClientService extends EventEmitter {
 
       // Gather node capabilities
       this.capabilities = await this.gatherNodeCapabilities();
-      
-      // Initialize work queue service
-      this.workQueueService = new WorkQueueService(
-        config.worker.id,
-        this.capabilities,
-        this.processInferenceJob.bind(this)
-      );
 
       // Setup event listeners
       this.setupEventListeners();
 
-      logger.info('Broker client service initialized successfully');
+      logger.info('Worker client service initialized successfully');
     } catch (error) {
-      logger.error('Failed to initialize broker client service', error);
+      logger.error('Failed to initialize worker client service', error);
       throw error;
     }
   }
 
   async start(): Promise<void> {
     try {
-      if (!this.workQueueService || !this.capabilities) {
+      if (!this.capabilities) {
         throw new Error('Service not initialized. Call initialize() first.');
       }
 
-      logger.info('Starting broker client service');
+      logger.info('Starting worker client service');
 
-      // Start work queue service
-      await this.workQueueService.start();
-
-      // Connect to broker
-      await this.connectToBroker();
+      // Connect to server
+      await this.connectToServer();
 
       // Start heartbeat
       this.startHeartbeat();
@@ -83,19 +71,22 @@ export class BrokerClientService extends EventEmitter {
       // Start resource monitoring
       this.startResourceMonitoring();
 
+      // Start job processing
+      this.startJobProcessing();
+
       this.isConnected = true;
       this.emit('connected');
 
-      logger.info('Broker client service started successfully');
+      logger.info('Worker client service started successfully');
     } catch (error) {
-      logger.error('Failed to start broker client service', error);
+      logger.error('Failed to start worker client service', error);
       throw error;
     }
   }
 
   async stop(): Promise<void> {
     try {
-      logger.info('Stopping broker client service');
+      logger.info('Stopping worker client service');
 
       this.isConnected = false;
 
@@ -110,22 +101,23 @@ export class BrokerClientService extends EventEmitter {
         this.resourceCheckInterval = null;
       }
 
-      // Stop work queue service
-      if (this.workQueueService) {
-        await this.workQueueService.stop();
+      // Wait for current job to complete
+      while (this.isProcessingJob) {
+        logger.info('Waiting for current job to complete...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // Disconnect from broker
-      await this.disconnectFromBroker();
+      // Disconnect from server
+      await this.disconnectFromServer();
 
       // Disconnect from Redis
       await this.redisManager.disconnect();
 
       this.emit('disconnected');
 
-      logger.info('Broker client service stopped successfully');
+      logger.info('Worker client service stopped successfully');
     } catch (error) {
-      logger.error('Error stopping broker client service', error);
+      logger.error('Error stopping worker client service', error);
       throw error;
     }
   }
@@ -162,7 +154,6 @@ export class BrokerClientService extends EventEmitter {
   }
 
   private determinePerformanceTier(resources: SystemResources): 'high' | 'medium' | 'low' {
-    // Determine performance tier based on system resources
     const cpuScore = resources.cpuCores >= 8 ? 3 : resources.cpuCores >= 4 ? 2 : 1;
     const memoryScore = resources.totalMemoryMB >= 16384 ? 3 : resources.totalMemoryMB >= 8192 ? 2 : 1;
     const gpuScore = resources.gpuMemoryMB ? (resources.gpuMemoryMB >= 16384 ? 3 : 2) : 0;
@@ -174,50 +165,26 @@ export class BrokerClientService extends EventEmitter {
     return 'low';
   }
 
-  private async connectToBroker(): Promise<void> {
+  private async connectToServer(): Promise<void> {
     try {
-      logger.info('Connecting to broker');
+      logger.info('Connecting to server');
 
-      // Authenticate with broker
-      await this.authenticate();
+      // Register with server
+      await this.registerWithServer();
 
-      // Register with broker
-      await this.registerWithBroker();
-
-      // Subscribe to relevant channels
-      await this.subscribeToChannels();
+      // Subscribe to worker-specific job channel
+      await this.subscribeToJobChannel();
 
       this.reconnectAttempts = 0;
-      logger.info('Connected to broker successfully');
+      logger.info('Connected to server successfully');
     } catch (error) {
-      logger.error('Failed to connect to broker', error);
+      logger.error('Failed to connect to server', error);
       await this.handleConnectionError();
       throw error;
     }
   }
 
-  private async authenticate(): Promise<void> {
-    try {
-      const authPayload = {
-        workerId: config.worker.id,
-        token: config.broker.authToken,
-        timestamp: Date.now(),
-      };
-
-      await this.redisManager.setWithExpiry(
-        `auth:${config.worker.id}`,
-        JSON.stringify(authPayload),
-        3600 // 1 hour
-      );
-
-      logger.debug('Authentication successful');
-    } catch (error) {
-      logger.error('Authentication failed', error);
-      throw new Error('Failed to authenticate with broker');
-    }
-  }
-
-  private async registerWithBroker(): Promise<void> {
+  private async registerWithServer(): Promise<void> {
     if (!this.capabilities) {
       throw new Error('Node capabilities not available');
     }
@@ -241,63 +208,49 @@ export class BrokerClientService extends EventEmitter {
         JSON.stringify(registrationData)
       );
 
-      logger.info('Registered with broker', {
+      logger.info('Registered with server', {
         workerId: config.worker.id,
       });
     } catch (error) {
-      logger.error('Failed to register with broker', error);
+      logger.error('Failed to register with server', error);
       throw error;
     }
   }
 
-  private async subscribeToChannels(): Promise<void> {
+  private async subscribeToJobChannel(): Promise<void> {
     try {
-      // Subscribe to worker-specific channel
+      // Subscribe to worker-specific job assignments
       await this.redisManager.subscribe(
-        `worker:${config.worker.id}`,
-        this.handleWorkerMessage.bind(this)
+        `worker:${config.worker.id}:job`,
+        this.handleJobMessage.bind(this)
       );
 
-      // Subscribe to broadcast channel
-      await this.redisManager.subscribe(
-        'broadcast',
-        this.handleBroadcastMessage.bind(this)
-      );
-
-      // Subscribe to system events
-      await this.redisManager.subscribe(
-        'system:events',
-        this.handleSystemEvent.bind(this)
-      );
-
-      logger.info('Subscribed to broker channels');
+      logger.info('Subscribed to job channel');
     } catch (error) {
-      logger.error('Failed to subscribe to channels', error);
+      logger.error('Failed to subscribe to job channel', error);
       throw error;
     }
   }
 
-  private async disconnectFromBroker(): Promise<void> {
+  private async disconnectFromServer(): Promise<void> {
     try {
       if (!this.isConnected) return;
 
-      logger.info('Disconnecting from broker');
+      logger.info('Disconnecting from server');
 
-      // Unregister from broker
-      await this.unregisterFromBroker();
+      // Unregister from server
+      await this.unregisterFromServer();
 
       // Unsubscribe from channels
-      await this.redisManager.unsubscribe(`worker:${config.worker.id}`);
-      await this.redisManager.unsubscribe('broadcast');
-      await this.redisManager.unsubscribe('system:events');
+      await this.redisManager.unsubscribe(`worker:${config.worker.id}:job`);
 
-      logger.info('Disconnected from broker');
+      logger.info('Disconnected from server');
     } catch (error) {
-      logger.error('Error disconnecting from broker', error);
+      logger.error('Error disconnecting from server', error);
     }
   }
 
-  private async unregisterFromBroker(): Promise<void> {
+  private async unregisterFromServer(): Promise<void> {
     try {
       await this.redisManager.delete(`workers:${config.worker.id}`);
       
@@ -309,9 +262,9 @@ export class BrokerClientService extends EventEmitter {
         })
       );
 
-      logger.info('Unregistered from broker');
+      logger.info('Unregistered from server');
     } catch (error) {
-      logger.error('Failed to unregister from broker', error);
+      logger.error('Failed to unregister from server', error);
     }
   }
 
@@ -332,18 +285,18 @@ export class BrokerClientService extends EventEmitter {
     this.isConnected = false;
     this.emit('connection_error');
 
-    if (this.reconnectAttempts < config.broker.maxReconnectAttempts) {
+    if (this.reconnectAttempts < config.server.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      const delay = config.broker.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+      const delay = config.server.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
-      logger.info('Attempting to reconnect to broker', {
+      logger.info('Attempting to reconnect to server', {
         attempt: this.reconnectAttempts,
         delay,
       });
 
       setTimeout(async () => {
         try {
-          await this.connectToBroker();
+          await this.connectToServer();
           this.isConnected = true;
           this.emit('reconnected');
         } catch (error) {
@@ -369,17 +322,15 @@ export class BrokerClientService extends EventEmitter {
         logger.error('Heartbeat failed', error);
         this.handleConnectionError();
       }
-    }, config.broker.heartbeatInterval);
+    }, config.server.heartbeatInterval);
 
     logger.info('Heartbeat started', {
-      interval: config.broker.heartbeatInterval,
+      interval: config.server.heartbeatInterval,
     });
   }
 
   private async sendHeartbeat(): Promise<void> {
-    if (!this.workQueueService) return;
-
-    const status = await this.workQueueService.getWorkerStatus();
+    const status = this.getWorkerStatus();
     
     const heartbeatData = {
       workerId: config.worker.id,
@@ -392,7 +343,7 @@ export class BrokerClientService extends EventEmitter {
     await this.redisManager.setWithExpiry(
       `heartbeat:${config.worker.id}`,
       JSON.stringify(heartbeatData),
-      config.broker.heartbeatInterval * 2 / 1000 // TTL is 2x heartbeat interval
+      config.server.heartbeatInterval * 2 / 1000 // TTL is 2x heartbeat interval
     );
 
     await this.redisManager.publish(
@@ -427,37 +378,30 @@ export class BrokerClientService extends EventEmitter {
     try {
       const systemResources = await this.ollamaService.getSystemResources();
       
-      // Check if resources are within acceptable limits
-      // if (this.shouldPauseWorker(systemResources)) {
-      //   logger.warn('Resource usage high, pausing worker', {
-      //     cpuUsage: systemResources.cpuUsagePercent,
-      //     memoryUsage: systemResources.memoryUsagePercent,
-      //   });
-        
-      //   if (this.workQueueService) {
-      //     await this.workQueueService.pause();
-      //   }
-      //   return;
-      // }
-
-      // Resume worker if it was paused
-      if (this.workQueueService) {
-        await this.workQueueService.resume();
-      }
-
       // Update capabilities
       this.capabilities.systemResources = systemResources;
       this.capabilities.lastUpdated = new Date();
 
-      // Update broker with new capabilities
+      // Update server with new capabilities
       await this.redisManager.hset(
         'workers',
         config.worker.id,
         JSON.stringify({
           workerId: config.worker.id,
           capabilities: this.capabilities,
-          status: 'online',
+          status: this.isProcessingJob ? 'busy' : 'online',
           lastUpdated: new Date().toISOString(),
+        })
+      );
+
+      // Publish status update
+      await this.redisManager.publish(
+        'worker:status_update',
+        JSON.stringify({
+          workerId: config.worker.id,
+          status: this.isProcessingJob ? 'busy' : 'online',
+          currentJobs: this.currentJobs,
+          systemResources,
         })
       );
     } catch (error) {
@@ -465,21 +409,46 @@ export class BrokerClientService extends EventEmitter {
     }
   }
 
-  private shouldPauseWorker(resources: SystemResources): boolean {
-    return (
-      resources.cpuUsagePercent > config.performance.maxCpuUsage ||
-      resources.memoryUsagePercent > config.performance.maxMemoryUsage ||
-      resources.availableMemoryMB < config.performance.minAvailableMemoryMB ||
-      (resources.gpuUsagePercent !== undefined && resources.gpuUsagePercent > config.performance.maxGpuMemoryUsage)
-    );
+  private startJobProcessing(): void {
+    logger.info('Started job processing');
   }
 
-  private async processInferenceJob(job: Job<InferenceRequest>): Promise<InferenceResponse> {
-    const request = job.data;
-    
+  private async handleJobMessage(message: string): Promise<void> {
     try {
-      // Update job progress
-      await job.updateProgress(10);
+      const data = JSON.parse(message);
+      logger.debug('Received job message', { type: data.type });
+
+      switch (data.type) {
+        case 'job_assignment':
+          await this.processJobAssignment(data.job);
+          break;
+        case 'job_cancellation':
+          await this.handleJobCancellation(data.jobId);
+          break;
+        default:
+          logger.warn('Unknown job message type', { type: data.type });
+      }
+    } catch (error) {
+      logger.error('Failed to handle job message', { message, error });
+    }
+  }
+
+  private async processJobAssignment(assignment: any): Promise<void> {
+    const request: InferenceRequest = assignment.request;
+    
+    if (this.isProcessingJob) {
+      logger.warn('Received job assignment while busy', { jobId: request.id });
+      return;
+    }
+
+    this.isProcessingJob = true;
+    this.currentJobs = 1;
+
+    try {
+      logger.info('Processing job assignment', {
+        jobId: request.id,
+        model: request.model,
+      });
 
       // Validate model availability
       const isModelValid = await this.ollamaService.validateModel(request.model);
@@ -487,18 +456,14 @@ export class BrokerClientService extends EventEmitter {
         throw new Error(`Model ${request.model} is not available`);
       }
 
-      await job.updateProgress(25);
-
       // Process inference
       let result: InferenceResponse | undefined;
       
       if (request.stream) {
-        // For streaming, we'll collect the full response
-        // In a real implementation, you'd want to stream this back
+        // For streaming, collect the full response
         let fullResponse = '';
         for await (const chunk of this.ollamaService.generateStreamResponse(request)) {
           fullResponse += chunk.response;
-          await job.updateProgress(25 + (chunk.done ? 50 : 25));
           
           if (chunk.done) {
             result = {
@@ -517,150 +482,95 @@ export class BrokerClientService extends EventEmitter {
         throw new Error('No result generated from inference');
       }
 
-      await job.updateProgress(100);
-
-      // Notify broker of completion
+      // Notify server of completion
       await this.redisManager.publish(
         'job:completed',
         JSON.stringify({
-          jobId: job.id,
+          jobId: request.id,
           workerId: config.worker.id,
           result,
           timestamp: new Date().toISOString(),
         })
       );
 
-      return result;
+      // Publish result to specific job channel for synchronous waiting
+      await this.redisManager.publish(
+        `job:result:${request.id}`,
+        JSON.stringify({
+          jobId: request.id,
+          workerId: config.worker.id,
+          result,
+          timestamp: new Date().toISOString(),
+        })
+      );
+
+      logger.info('Job completed successfully', {
+        jobId: request.id,
+        model: request.model,
+      });
+
     } catch (error) {
-      // Notify broker of failure
+      logger.error('Job processing failed', {
+        jobId: request.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      // Notify server of failure
       await this.redisManager.publish(
         'job:failed',
         JSON.stringify({
-          jobId: job.id,
+          jobId: request.id,
           workerId: config.worker.id,
           error: error instanceof Error ? error.message : 'Unknown error',
           timestamp: new Date().toISOString(),
         })
       );
 
-      throw error;
+      // Publish error to specific job channel
+      await this.redisManager.publish(
+        `job:result:${request.id}`,
+        JSON.stringify({
+          jobId: request.id,
+          workerId: config.worker.id,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+        })
+      );
+    } finally {
+      this.isProcessingJob = false;
+      this.currentJobs = 0;
     }
   }
 
-  private handleWorkerMessage(message: string): void {
-    try {
-      const data = JSON.parse(message);
-      logger.debug('Received worker message', { type: data.type, data });
-
-      switch (data.type) {
-        case 'pause':
-          this.pauseWorker();
-          break;
-        case 'resume':
-          this.resumeWorker();
-          break;
-        case 'shutdown':
-          this.gracefulShutdown();
-          break;
-        case 'update_capabilities':
-          this.updateCapabilities();
-          break;
-        default:
-          logger.warn('Unknown worker message type', { type: data.type });
-      }
-    } catch (error) {
-      logger.error('Failed to handle worker message', { message, error });
-    }
-  }
-
-  private handleBroadcastMessage(message: string): void {
-    try {
-      const data = JSON.parse(message);
-      logger.debug('Received broadcast message', { type: data.type });
-
-      switch (data.type) {
-        case 'maintenance_mode':
-          logger.info('Broker entering maintenance mode');
-          this.emit('maintenance_mode', data);
-          break;
-        case 'system_shutdown':
-          logger.info('System shutdown initiated');
-          this.gracefulShutdown();
-          break;
-        default:
-          logger.debug('Unhandled broadcast message', { type: data.type });
-      }
-    } catch (error) {
-      logger.error('Failed to handle broadcast message', { message, error });
-    }
-  }
-
-  private handleSystemEvent(message: string): void {
-    try {
-      const event = JSON.parse(message);
-      logger.info('System event received', { type: event.type });
-      this.emit('system_event', event);
-    } catch (error) {
-      logger.error('Failed to handle system event', { message, error });
-    }
-  }
-
-  private async pauseWorker(): Promise<void> {
-    if (this.workQueueService) {
-      await this.workQueueService.pause();
-      logger.info('Worker paused');
-    }
-  }
-
-  private async resumeWorker(): Promise<void> {
-    if (this.workQueueService) {
-      await this.workQueueService.resume();
-      logger.info('Worker resumed');
-    }
-  }
-
-  private async gracefulShutdown(): Promise<void> {
-    logger.info('Initiating graceful shutdown');
-    this.emit('shutdown_requested');
-    
-    setTimeout(() => {
-      this.stop().catch(error => {
-        logger.error('Error during graceful shutdown', error);
-        process.exit(1);
-      });
-    }, 5000); // 5 second delay for graceful shutdown
+  private async handleJobCancellation(jobId: string): Promise<void> {
+    logger.info('Job cancellation requested', { jobId });
+    // In a real implementation, you'd cancel the running job
+    // For now, just log it
   }
 
   // Public methods
-  async getStatus(): Promise<WorkerStatus | null> {
-    if (!this.workQueueService) return null;
-    return await this.workQueueService.getWorkerStatus();
+  getWorkerStatus(): WorkerStatus {
+    return {
+      id: config.worker.id,
+      status: this.isProcessingJob ? 'busy' : (this.isConnected ? 'online' : 'offline'),
+      currentJobs: [], // For now, simplified to empty array
+      capabilities: this.capabilities || {} as NodeCapabilities,
+      lastHeartbeat: new Date(),
+      connectionHealth: this.isConnected ? 'healthy' : 'poor',
+    };
   }
 
-  getConnectionStatus(): BrokerConnection {
-    const connectionStatus: BrokerConnection = {
+  getConnectionStatus(): any {
+    return {
       isConnected: this.isConnected,
       reconnectAttempts: this.reconnectAttempts,
+      lastConnected: this.isConnected ? new Date() : undefined,
     };
-
-    if (this.isConnected) {
-      connectionStatus.lastConnected = new Date();
-    }
-
-    return connectionStatus;
   }
 
   getCapabilities(): NodeCapabilities | null {
     return this.capabilities;
   }
-
-  async addJob(request: InferenceRequest): Promise<void> {
-    if (!this.workQueueService) {
-      throw new Error('Work queue service not available');
-    }
-    
-    await this.workQueueService.addJob(request);
-  }
 }
 
-export default BrokerClientService;
+export default WorkerClientService;

@@ -1,23 +1,37 @@
-# LLMama Broker Client
+# LLMama Worker Client
 
-A distributed AI inference broker client that acts as a broker dealer between individual node Ollama installations and a central host broker handler. This client facilitates distributed AI inference workload management across multiple compute nodes.
+A distributed AI inference worker client that connects to the central LLMama server. This worker provides local Ollama compute resources to a distributed AI inference network with hot-join capability.
+
+## Architecture
+
+This repository contains:
+- **Worker Client** (`/src`) - Connects to central server, provides compute resources
+- **Server** (`/server`) - Central coordinator for managing workers and distributing jobs
+
+### Hot-Join Worker Design
+
+Workers can dynamically join and leave the network:
+- Workers discover and connect to the central server via configuration
+- Workers register their capabilities (available models, performance tier, resources)
+- Server assigns jobs based on worker availability and current load
+- Workers gracefully disconnect when needed (perfect for laptop usage)
 
 ## Features
 
-- **Connection Management**: Persistent connection to central broker via Redis with automatic reconnection
-- **Ollama Integration**: Detects and connects to local Ollama instance, monitors health and capabilities
-- **Work Distribution**: Registers node capabilities, polls for tasks, and executes inference requests
-- **Task Execution**: Handles inference requests with proper error handling, timeouts, and progress tracking
-- **Health Monitoring**: Real-time system resource monitoring and health checks
-- **Distributed Queue**: Uses BullMQ and Redis for reliable task distribution
+- **Hot-Join Capability**: Connect/disconnect workers dynamically
+- **Automatic Job Distribution**: Server assigns jobs based on worker utilization
+- **Ollama Integration**: Local AI model serving with health monitoring
+- **Resource Monitoring**: Real-time system resource tracking
+- **Graceful Shutdown**: Wait for current jobs to complete before disconnecting
+- **Fault Tolerance**: Automatic reconnection and job retry mechanisms
 
 ## Prerequisites
 
 Before running this project, ensure you have:
 
 1. **Node.js** (v18 or higher)
-2. **Redis** server running
-3. **Ollama** installed and running locally
+2. **Redis** server running (for the central server)
+3. **Ollama** installed and running locally on worker machines
 4. **npm** or **yarn** package manager
 
 ### Installing Prerequisites
@@ -30,7 +44,7 @@ brew install node
 # Or download from https://nodejs.org/
 ```
 
-#### Install and Start Redis
+#### Install and Start Redis (for server only)
 ```bash
 # macOS (using Homebrew)
 brew install redis
@@ -40,7 +54,7 @@ brew services start redis
 docker run -d -p 6379:6379 redis:7-alpine
 ```
 
-#### Install and Start Ollama
+#### Install and Start Ollama (on each worker)
 ```bash
 # macOS
 curl -fsSL https://ollama.com/install.sh | sh
@@ -52,104 +66,111 @@ ollama serve
 ollama pull llama2  # or any other model you prefer
 ```
 
-## Installation
+## Quick Start
 
-1. **Clone the repository** (if not already done):
-```bash
-git clone <repository-url>
-cd LLMama
-```
+### 1. Start the Central Server
 
-2. **Install dependencies**:
 ```bash
+# In the server directory
+cd server
 npm install
-```
-
-3. **Configure environment**:
-```bash
-# Copy the example environment file
 cp .env.example .env
-
 # Edit .env with your configuration
-nano .env
+npm run dev
 ```
 
-Key environment variables to configure:
+The server will start on port 4000 by default.
+
+### 2. Start Worker Clients
+
+```bash
+# In the main directory
+npm install
+cp .env.example .env
+# Edit .env with your server connection details
+npm run dev
+```
+
+Workers will automatically connect to the server and register their capabilities.
+
+### 3. Submit Inference Requests
+
+Submit requests to the server (not individual workers):
+
+```bash
+curl -X POST http://localhost:4000/inference \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama2",
+    "prompt": "Hello, how are you?",
+    "priority": "medium"
+  }'
+```
+
+## Configuration
+
+### Server Configuration (`server/.env`)
+
 ```env
-# Redis Configuration
+# Server Configuration
+PORT=4000
 REDIS_HOST=localhost
 REDIS_PORT=6379
+
+# Worker Management
+WORKER_HEARTBEAT_TIMEOUT=60000
+MAX_CONCURRENT_JOBS_PER_WORKER=1
+```
+
+### Worker Configuration (`.env`)
+
+```env
+# Worker Configuration
+PORT=3000
+WORKER_ID=worker-macbook-001
+
+# Server Connection
+SERVER_HOST=localhost
+SERVER_PORT=4000
+SERVER_REDIS_HOST=localhost
+SERVER_REDIS_PORT=6379
 
 # Ollama Configuration
 OLLAMA_HOST=localhost
 OLLAMA_PORT=11434
-
-# Security (change these!)
-BROKER_AUTH_TOKEN=your-secure-token-here
-JWT_SECRET=your-super-secret-jwt-key
-API_KEY=your-api-key-here
-
-# Worker Configuration
-WORKER_ID=worker-001
 ```
 
-## Running the Project
+## Hot-Join Usage
 
-### Development Mode
+### Adding Your MacBook to the Pool
+
+1. **Start your worker** when you want to contribute compute:
 ```bash
-# Start in development mode with hot reload
 npm run dev
 ```
 
-### Production Mode
+2. **Monitor your worker** via the local health endpoint:
 ```bash
-# Build the project
-npm run build
-
-# Start in production mode
-npm start
+curl http://localhost:3000/worker/status
 ```
 
-### Using Docker
+3. **Gracefully disconnect** when you need your MacBook:
 ```bash
-# Build and run with Docker Compose
-docker-compose up --build
-
-# Or build Docker image manually
-docker build -t llmama-client .
-docker run -p 3000:3000 llmama-client
+# Ctrl+C or SIGTERM - worker will finish current job before stopping
 ```
 
-## API Endpoints
+### Managing the Network
 
-Once running, the service provides these endpoints:
-
-### Health Checks
-- `GET /health` - Basic health status
-- `GET /health/live` - Liveness probe
-- `GET /health/ready` - Readiness probe
-- `GET /health/system` - Detailed system information
-
-### Root
-- `GET /` - Service information
-
-## Verification
-
-After starting the service, verify it's working:
-
-1. **Check service status**:
+**Server Status:**
 ```bash
-curl http://localhost:3000/
+curl http://localhost:4000/health/workers  # View all connected workers
+curl http://localhost:4000/health/jobs     # View job queue status
+curl http://localhost:4000/inference/queue # Detailed queue information
 ```
 
-2. **Check health**:
+**Available Models:**
 ```bash
-curl http://localhost:3000/health
-```
-
-3. **Check system info**:
-```bash
-curl http://localhost:3000/health/system
+curl http://localhost:4000/inference/models  # Models across all workers
 ```
 
 ## Troubleshooting

@@ -4,19 +4,18 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { config } from '@/config';
 import { logger } from '@/utils/logger';
-import { BrokerClientService } from '@/services/BrokerClientService';
+import { WorkerClientService } from '@/services/WorkerClientService';
 import { healthRoutes } from '@/routes/health';
-import { inferenceRoutes } from '@/routes/inference';
 import { errorHandler } from '@/middleware/errorHandler';
 
-class Application {
+class WorkerApplication {
   private app: express.Application;
-  private brokerClient: BrokerClientService;
+  private workerClient: WorkerClientService;
   private server: any;
 
   constructor() {
     this.app = express();
-    this.brokerClient = new BrokerClientService();
+    this.workerClient = new WorkerClientService();
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
@@ -50,18 +49,33 @@ class Application {
   }
 
   private setupRoutes(): void {
-    // Public routes
+    // Health routes only (no inference routes on worker)
     this.app.use('/health', healthRoutes);
-    
-    // Inference routes (protected by broker client dependency)
-    this.app.use('/inference', inferenceRoutes(this.brokerClient));
 
     // Root endpoint
     this.app.get('/', (req, res) => {
+      const status = this.workerClient.getWorkerStatus();
+      const capabilities = this.workerClient.getCapabilities();
+      
       res.json({
-        name: 'LLMama Broker Client',
+        name: 'LLMama Worker',
         version: '1.0.0',
         status: 'running',
+        workerId: config.worker.id,
+        workerStatus: status.status,
+        connectedToServer: this.workerClient.getConnectionStatus().isConnected,
+        availableModels: capabilities?.availableModels.length || 0,
+        performanceTier: capabilities?.performanceTier || 'unknown',
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // Worker status endpoint
+    this.app.get('/worker/status', (req, res) => {
+      res.json({
+        worker: this.workerClient.getWorkerStatus(),
+        connection: this.workerClient.getConnectionStatus(),
+        capabilities: this.workerClient.getCapabilities(),
         timestamp: new Date().toISOString(),
       });
     });
@@ -80,30 +94,25 @@ class Application {
   }
 
   private setupEventHandlers(): void {
-    // Broker client events
-    this.brokerClient.on('connected', () => {
-      logger.info('Broker client connected');
+    // Worker client events
+    this.workerClient.on('connected', () => {
+      logger.info('Worker client connected to server');
     });
 
-    this.brokerClient.on('disconnected', () => {
-      logger.warn('Broker client disconnected');
+    this.workerClient.on('disconnected', () => {
+      logger.warn('Worker client disconnected from server');
     });
 
-    this.brokerClient.on('connection_error', () => {
-      logger.error('Broker client connection error');
+    this.workerClient.on('connection_error', () => {
+      logger.error('Worker client connection error');
     });
 
-    this.brokerClient.on('reconnected', () => {
-      logger.info('Broker client reconnected');
+    this.workerClient.on('reconnected', () => {
+      logger.info('Worker client reconnected to server');
     });
 
-    this.brokerClient.on('max_reconnect_attempts_reached', () => {
+    this.workerClient.on('max_reconnect_attempts_reached', () => {
       logger.error('Max reconnect attempts reached, shutting down');
-      this.shutdown();
-    });
-
-    this.brokerClient.on('shutdown_requested', () => {
-      logger.info('Shutdown requested by broker');
       this.shutdown();
     });
 
@@ -131,18 +140,20 @@ class Application {
 
   async start(): Promise<void> {
     try {
-      logger.info('Starting application');
+      logger.info('Starting worker application');
 
-      // Initialize and start broker client
-      await this.brokerClient.initialize();
-      await this.brokerClient.start();
+      // Initialize and start worker client
+      await this.workerClient.initialize();
+      await this.workerClient.start();
 
-      // Start HTTP server
+      // Start HTTP server for health checks
       this.server = this.app.listen(config.port, () => {
-        logger.info('Application started successfully', {
+        logger.info('Worker application started successfully', {
           port: config.port,
           env: config.env,
           workerId: config.worker.id,
+          serverHost: config.server.host,
+          serverPort: config.server.port,
         });
       });
 
@@ -152,13 +163,13 @@ class Application {
       });
 
     } catch (error) {
-      logger.error('Failed to start application', error);
+      logger.error('Failed to start worker application', error);
       throw error;
     }
   }
 
   async shutdown(exitCode: number = 0): Promise<void> {
-    logger.info('Shutting down application', { exitCode });
+    logger.info('Shutting down worker application', { exitCode });
 
     try {
       // Stop accepting new connections
@@ -168,10 +179,10 @@ class Application {
         });
       }
 
-      // Stop broker client
-      await this.brokerClient.stop();
+      // Stop worker client
+      await this.workerClient.stop();
 
-      logger.info('Application shutdown complete');
+      logger.info('Worker application shutdown complete');
       process.exit(exitCode);
     } catch (error) {
       logger.error('Error during shutdown', error);
@@ -183,19 +194,19 @@ class Application {
     return this.app;
   }
 
-  getBrokerClient(): BrokerClientService {
-    return this.brokerClient;
+  getWorkerClient(): WorkerClientService {
+    return this.workerClient;
   }
 }
 
 // Start the application if this file is run directly
 if (require.main === module) {
-  const app = new Application();
+  const app = new WorkerApplication();
   
   app.start().catch((error) => {
-    logger.error('Failed to start application', error);
+    logger.error('Failed to start worker application', error);
     process.exit(1);
   });
 }
 
-export default Application;
+export default WorkerApplication;
