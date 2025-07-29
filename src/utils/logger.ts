@@ -8,6 +8,29 @@ if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir, { recursive: true });
 }
 
+// Safe JSON stringify function to handle circular references
+const safeStringify = (obj: any, space?: number): string => {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular Reference]';
+      }
+      seen.add(value);
+    }
+    // Handle Error objects properly
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+        stack: value.stack,
+        ...(value as any) // Include any additional properties
+      };
+    }
+    return value;
+  }, space);
+};
+
 const logFormat = winston.format.combine(
   winston.format.timestamp({
     format: 'YYYY-MM-DD HH:mm:ss'
@@ -22,7 +45,11 @@ const logFormat = winston.format.combine(
     }
     
     if (Object.keys(meta).length > 0) {
-      logMessage += `\n${JSON.stringify(meta, null, 2)}`;
+      try {
+        logMessage += `\n${safeStringify(meta, 2)}`;
+      } catch (error) {
+        logMessage += `\n[Error serializing metadata: ${error instanceof Error ? error.message : 'Unknown error'}]`;
+      }
     }
     
     return logMessage;

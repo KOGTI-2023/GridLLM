@@ -428,17 +428,17 @@ export class BrokerClientService extends EventEmitter {
       const systemResources = await this.ollamaService.getSystemResources();
       
       // Check if resources are within acceptable limits
-      if (this.shouldPauseWorker(systemResources)) {
-        logger.warn('Resource usage high, pausing worker', {
-          cpuUsage: systemResources.cpuUsagePercent,
-          memoryUsage: systemResources.memoryUsagePercent,
-        });
+      // if (this.shouldPauseWorker(systemResources)) {
+      //   logger.warn('Resource usage high, pausing worker', {
+      //     cpuUsage: systemResources.cpuUsagePercent,
+      //     memoryUsage: systemResources.memoryUsagePercent,
+      //   });
         
-        if (this.workQueueService) {
-          await this.workQueueService.pause();
-        }
-        return;
-      }
+      //   if (this.workQueueService) {
+      //     await this.workQueueService.pause();
+      //   }
+      //   return;
+      // }
 
       // Resume worker if it was paused
       if (this.workQueueService) {

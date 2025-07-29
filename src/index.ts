@@ -6,6 +6,7 @@ import { config } from '@/config';
 import { logger } from '@/utils/logger';
 import { BrokerClientService } from '@/services/BrokerClientService';
 import { healthRoutes } from '@/routes/health';
+import { inferenceRoutes } from '@/routes/inference';
 import { errorHandler } from '@/middleware/errorHandler';
 
 class Application {
@@ -51,6 +52,9 @@ class Application {
   private setupRoutes(): void {
     // Public routes
     this.app.use('/health', healthRoutes);
+    
+    // Inference routes (protected by broker client dependency)
+    this.app.use('/inference', inferenceRoutes(this.brokerClient));
 
     // Root endpoint
     this.app.get('/', (req, res) => {
