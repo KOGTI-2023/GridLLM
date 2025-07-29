@@ -1,4 +1,4 @@
-# GridLLM - Distributed AI Inference Network
+# LLMama - Distributed AI Inference Network
 
 A distributed AI inference system with hot-join capability, designed for dynamic worker pools. Perfect for adding your MacBook or other machines to a shared AI compute network when available.
 
@@ -17,14 +17,13 @@ The system is designed for dynamic worker participation:
 - **Intelligent Job Routing**: Server automatically routes jobs to available workers based on model availability and current load
 - **Graceful Disconnection**: Workers finish current jobs before leaving the network
 
-## Features
+### Ollama API Compatibility
 
-- 🔥 **Hot-Join Capability**: Workers can connect/disconnect dynamically
-- 🎯 **Smart Job Distribution**: Automatic load balancing based on worker utilization
-- 🤖 **Ollama Integration**: Seamless local AI model serving
-- 📊 **Resource Monitoring**: Real-time system resource tracking
-- 🛡️ **Fault Tolerance**: Automatic reconnection and job retry mechanisms
-- 🔧 **Easy Management**: Simple Makefile commands for common operations
+LLMama provides **full Ollama API compatibility** under the `/ollama` route:
+- Use existing Ollama clients without modification
+- All Ollama endpoints supported (`/api/generate`, `/api/chat`, `/api/tags`, etc.)
+- Transparent load balancing across distributed workers
+- See [Ollama API Documentation](docs/OLLAMA_API.md) for complete details
 
 ## Prerequisites
 
@@ -92,6 +91,7 @@ npm run dev
 
 The server starts on port 4000 by default and provides:
 - Inference API at `http://localhost:4000/inference`
+- **Ollama API at `http://localhost:4000/ollama`** (full compatibility)
 - Health monitoring at `http://localhost:4000/health`
 - Worker management endpoints
 
@@ -116,6 +116,7 @@ Workers automatically:
 
 Send requests to the server (not individual workers):
 
+#### Using LLMama Native API
 ```bash
 # Basic inference request
 curl -X POST http://localhost:4000/inference \
@@ -131,6 +132,34 @@ curl http://localhost:4000/inference/models
 
 # Check worker status
 curl http://localhost:4000/health/workers
+```
+
+#### Using Ollama-Compatible API
+```bash
+# Generate text completion (just like Ollama!)
+curl http://localhost:4000/ollama/api/generate -d '{
+  "model": "llama3.2",
+  "prompt": "Why is the sky blue?",
+  "stream": false
+}'
+
+# Chat completion
+curl http://localhost:4000/ollama/api/chat -d '{
+  "model": "llama3.2", 
+  "messages": [
+    {"role": "user", "content": "Hello!"}
+  ],
+  "stream": false
+}'
+
+# List available models
+curl http://localhost:4000/ollama/api/tags
+
+# Generate embeddings
+curl http://localhost:4000/ollama/api/embed -d '{
+  "model": "all-minilm",
+  "input": "Hello world"
+}'
 ```
 
 ## Configuration

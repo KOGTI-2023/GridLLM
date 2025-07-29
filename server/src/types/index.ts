@@ -24,10 +24,12 @@ export interface SystemResources {
 
 export interface OllamaModel {
   name: string;
+  model?: string;
   size: number;
   digest: string;
   modified_at: string;
   details?: {
+    parent_model?: string;
     format: string;
     family: string;
     families: string[];
@@ -84,6 +86,7 @@ export interface InferenceResponse {
   created_at?: string;
   response: string;
   done: boolean;
+  done_reason?: string;
   context?: number[];
   total_duration?: number;
   load_duration?: number;
@@ -134,4 +137,106 @@ export interface JobEvent {
   workerId?: string;
   timestamp: Date;
   data?: any;
+}
+
+// Ollama-specific types
+export interface OllamaChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  thinking?: string;
+  images?: string[];
+  tool_calls?: any[];
+  tool_name?: string;
+}
+
+export interface OllamaChatRequest {
+  model: string;
+  messages: OllamaChatMessage[];
+  tools?: any[];
+  think?: boolean;
+  format?: string | object;
+  options?: Record<string, any>;
+  stream?: boolean;
+  keep_alive?: string | number;
+}
+
+export interface OllamaChatResponse {
+  model: string;
+  created_at: string;
+  message: {
+    role: string;
+    content: string;
+    images?: null;
+    tool_calls?: any[];
+  };
+  done: boolean;
+  done_reason?: string;
+  total_duration?: number;
+  load_duration?: number;
+  prompt_eval_count?: number;
+  prompt_eval_duration?: number;
+  eval_count?: number;
+  eval_duration?: number;
+}
+
+export interface OllamaGenerateRequest {
+  model: string;
+  prompt: string;
+  suffix?: string;
+  images?: string[];
+  think?: boolean;
+  format?: string | object;
+  options?: Record<string, any>;
+  system?: string;
+  template?: string;
+  stream?: boolean;
+  raw?: boolean;
+  keep_alive?: string | number;
+  context?: number[];
+}
+
+export interface OllamaGenerateResponse {
+  model: string;
+  created_at: string;
+  response: string;
+  done: boolean;
+  done_reason?: string;
+  context?: number[];
+  total_duration?: number;
+  load_duration?: number;
+  prompt_eval_count?: number;
+  prompt_eval_duration?: number;
+  eval_count?: number;
+  eval_duration?: number;
+}
+
+export interface OllamaModelDetails {
+  parent_model?: string;
+  format: string;
+  family: string;
+  families: string[];
+  parameter_size: string;
+  quantization_level: string;
+}
+
+export interface OllamaModelInfo {
+  name: string;
+  model: string;
+  modified_at: string;
+  size: number;
+  digest: string;
+  details: OllamaModelDetails;
+}
+
+export interface OllamaTagsResponse {
+  models: OllamaModelInfo[];
+}
+
+export interface OllamaShowResponse {
+  modelfile: string;
+  parameters: string;
+  template: string;
+  details: OllamaModelDetails;
+  model_info: Record<string, any>;
+  capabilities: string[];
 }

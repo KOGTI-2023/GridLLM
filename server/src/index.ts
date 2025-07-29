@@ -9,6 +9,7 @@ import { WorkerRegistry } from '@/services/WorkerRegistry';
 import { JobScheduler } from '@/services/JobScheduler';
 import { healthRoutes } from '@/routes/health';
 import { inferenceRoutes } from '@/routes/inference';
+import { ollamaRoutes } from '@/routes/ollama';
 import { errorHandler, notFoundHandler } from '@/middleware/errorHandler';
 
 class LLMamaServer {
@@ -63,6 +64,9 @@ class LLMamaServer {
     // Inference routes
     this.app.use('/inference', inferenceRoutes(this.jobScheduler, this.workerRegistry));
 
+    // Ollama API routes - exact replica of Ollama functionality
+    this.app.use('/ollama', ollamaRoutes(this.jobScheduler, this.workerRegistry));
+
     // Root endpoint
     this.app.get('/', (req, res) => {
       res.json({
@@ -78,6 +82,11 @@ class LLMamaServer {
         jobs: {
           active: this.jobScheduler.getActiveJobCount(),
           queued: this.jobScheduler.getQueuedJobCount(),
+        },
+        endpoints: {
+          health: '/health',
+          inference: '/inference',
+          ollama: '/ollama',
         },
         timestamp: new Date().toISOString(),
       });
