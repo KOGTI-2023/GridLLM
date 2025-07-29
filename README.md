@@ -423,10 +423,10 @@ cd client && npm start
 
 ```json
 {
-  "model": "llama3.2",
-  "prompt": "Your prompt here",
-  "priority": "medium",
-  "timeout": 60000
+	"model": "llama3.2",
+	"prompt": "Your prompt here",
+	"priority": "medium",
+	"timeout": 60000
 }
 ```
 
