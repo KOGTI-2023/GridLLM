@@ -21,13 +21,12 @@ const envSchema = Joi.object({
   OLLAMA_TIMEOUT: Joi.number().default(300000),
   OLLAMA_MAX_RETRIES: Joi.number().default(3),
   
-  // Broker Configuration
-  BROKER_HOST: Joi.string().default('localhost'),
-  BROKER_PORT: Joi.number().default(6379),
-  BROKER_AUTH_TOKEN: Joi.string().required(),
-  BROKER_HEARTBEAT_INTERVAL: Joi.number().default(30000),
-  BROKER_RECONNECT_DELAY: Joi.number().default(5000),
-  BROKER_MAX_RECONNECT_ATTEMPTS: Joi.number().default(10),
+  // Server Configuration (instead of broker)
+  SERVER_HOST: Joi.string().default('localhost'),
+  SERVER_PORT: Joi.number().default(4000),
+  SERVER_REDIS_HOST: Joi.string().default('localhost'),
+  SERVER_REDIS_PORT: Joi.number().default(6379),
+  SERVER_REDIS_PASSWORD: Joi.string().allow('').default(''),
   
   // Worker Configuration
   WORKER_ID: Joi.string().default(`worker-${Math.random().toString(36).substr(2, 9)}`),
@@ -42,10 +41,8 @@ const envSchema = Joi.object({
   MAX_GPU_MEMORY_USAGE: Joi.number().default(90),
   MIN_AVAILABLE_MEMORY_MB: Joi.number().default(1024),
   
-  // Security
-  JWT_SECRET: Joi.string().required(),
-  API_KEY: Joi.string().required(),
-  ENCRYPT_SENSITIVE_DATA: Joi.boolean().default(true),
+  // Security (simplified for worker)
+  API_KEY: Joi.string().default('worker-api-key'),
   
   // Monitoring & Logging
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
@@ -75,9 +72,9 @@ export const config = {
   port: envVars.PORT,
   
   redis: {
-    host: envVars.REDIS_HOST,
-    port: envVars.REDIS_PORT,
-    password: envVars.REDIS_PASSWORD || undefined,
+    host: envVars.SERVER_REDIS_HOST,
+    port: envVars.SERVER_REDIS_PORT,
+    password: envVars.SERVER_REDIS_PASSWORD || undefined,
     db: envVars.REDIS_DB,
     keyPrefix: envVars.REDIS_KEY_PREFIX,
     retryDelayOnFailover: 100,
@@ -94,13 +91,12 @@ export const config = {
     baseUrl: `${envVars.OLLAMA_PROTOCOL}://${envVars.OLLAMA_HOST}:${envVars.OLLAMA_PORT}`,
   },
   
-  broker: {
-    host: envVars.BROKER_HOST,
-    port: envVars.BROKER_PORT,
-    authToken: envVars.BROKER_AUTH_TOKEN,
-    heartbeatInterval: envVars.BROKER_HEARTBEAT_INTERVAL,
-    reconnectDelay: envVars.BROKER_RECONNECT_DELAY,
-    maxReconnectAttempts: envVars.BROKER_MAX_RECONNECT_ATTEMPTS,
+  server: {
+    host: envVars.SERVER_HOST,
+    port: envVars.SERVER_PORT,
+    heartbeatInterval: 30000, // Fixed interval for workers
+    reconnectDelay: 5000,
+    maxReconnectAttempts: 10,
   },
   
   worker: {
@@ -119,9 +115,7 @@ export const config = {
   },
   
   security: {
-    jwtSecret: envVars.JWT_SECRET,
     apiKey: envVars.API_KEY,
-    encryptSensitiveData: envVars.ENCRYPT_SENSITIVE_DATA,
   },
   
   logging: {
@@ -141,6 +135,13 @@ export const config = {
   rateLimit: {
     window: envVars.RATE_LIMIT_WINDOW,
     maxRequests: envVars.RATE_LIMIT_MAX_REQUESTS,
+  },
+
+  broker: {
+    authToken: process.env.BROKER_AUTH_TOKEN || '',
+    maxReconnectAttempts: 5,
+    reconnectDelay: 1000,
+    heartbeatInterval: 5000,
   },
 };
 

@@ -1,7 +1,7 @@
 {
-  "name": "llmama-broker-client",
+  "name": "llmama-worker-client",
   "version": "1.0.0",
-  "description": "Distributed AI inference broker client for Ollama nodes",
+  "description": "Distributed AI inference worker client for LLMama server",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
