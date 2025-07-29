@@ -1,6 +1,6 @@
-import Redis from 'ioredis';
-import { config } from '@/config';
-import { logger } from '@/utils/logger';
+import Redis from "ioredis";
+import { config } from "@/config";
+import { logger } from "@/utils/logger";
 
 export class RedisConnectionManager {
   private static instance: RedisConnectionManager;
@@ -23,11 +23,11 @@ export class RedisConnectionManager {
   async connect(): Promise<void> {
     try {
       if (this.isConnected) {
-        logger.debug('Redis already connected');
+        logger.debug("Redis already connected");
         return;
       }
 
-      logger.info('Connecting to Redis...', {
+      logger.info("Connecting to Redis...", {
         host: config.redis.host,
         port: config.redis.port,
         db: config.redis.db,
@@ -44,7 +44,7 @@ export class RedisConnectionManager {
         maxRetriesPerRequest: config.redis.maxRetriesPerRequest,
         lazyConnect: true,
         reconnectOnError: (err: Error) => {
-          logger.warn('Redis reconnecting on error', { error: err.message });
+          logger.warn("Redis reconnecting on error", { error: err.message });
           return true;
         },
       });
@@ -81,10 +81,9 @@ export class RedisConnectionManager {
 
       this.isConnected = true;
       this.reconnectAttempts = 0;
-      logger.info('Redis connected successfully');
-
+      logger.info("Redis connected successfully");
     } catch (error) {
-      logger.error('Failed to connect to Redis', error);
+      logger.error("Failed to connect to Redis", error);
       this.isConnected = false;
       throw error;
     }
@@ -94,57 +93,57 @@ export class RedisConnectionManager {
     if (!this.redis || !this.subscriber || !this.publisher) return;
 
     // Main connection events
-    this.redis.on('connect', () => {
-      logger.info('Redis main connection established');
+    this.redis.on("connect", () => {
+      logger.info("Redis main connection established");
     });
 
-    this.redis.on('ready', () => {
-      logger.info('Redis main connection ready');
+    this.redis.on("ready", () => {
+      logger.info("Redis main connection ready");
       this.isConnected = true;
       this.reconnectAttempts = 0;
     });
 
-    this.redis.on('error', (error) => {
-      logger.error('Redis main connection error', error);
+    this.redis.on("error", (error) => {
+      logger.error("Redis main connection error", error);
       this.isConnected = false;
     });
 
-    this.redis.on('close', () => {
-      logger.warn('Redis main connection closed');
+    this.redis.on("close", () => {
+      logger.warn("Redis main connection closed");
       this.isConnected = false;
     });
 
-    this.redis.on('reconnecting', (delay: number) => {
+    this.redis.on("reconnecting", (delay: number) => {
       this.reconnectAttempts++;
-      logger.info('Redis main connection reconnecting', {
+      logger.info("Redis main connection reconnecting", {
         delay,
         attempt: this.reconnectAttempts,
       });
 
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-        logger.error('Max Redis reconnection attempts reached');
+        logger.error("Max Redis reconnection attempts reached");
         this.redis?.disconnect();
       }
     });
 
     // Subscriber events
-    this.subscriber.on('error', (error) => {
-      logger.error('Redis subscriber error', error);
+    this.subscriber.on("error", (error) => {
+      logger.error("Redis subscriber error", error);
     });
 
-    this.subscriber.on('message', (channel, message) => {
-      logger.debug('Redis message received', { channel, message });
+    this.subscriber.on("message", (channel, message) => {
+      logger.debug("Redis message received", { channel, message });
     });
 
     // Publisher events
-    this.publisher.on('error', (error) => {
-      logger.error('Redis publisher error', error);
+    this.publisher.on("error", (error) => {
+      logger.error("Redis publisher error", error);
     });
   }
 
   async disconnect(): Promise<void> {
     try {
-      logger.info('Disconnecting from Redis...');
+      logger.info("Disconnecting from Redis...");
 
       const disconnectPromises = [];
 
@@ -167,30 +166,30 @@ export class RedisConnectionManager {
       this.publisher = null;
       this.isConnected = false;
 
-      logger.info('Redis disconnected successfully');
+      logger.info("Redis disconnected successfully");
     } catch (error) {
-      logger.error('Error disconnecting from Redis', error);
+      logger.error("Error disconnecting from Redis", error);
       throw error;
     }
   }
 
   getMainConnection(): Redis {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected. Call connect() first.');
+      throw new Error("Redis not connected. Call connect() first.");
     }
     return this.redis;
   }
 
   getSubscriber(): Redis {
     if (!this.subscriber || !this.isConnected) {
-      throw new Error('Redis subscriber not connected. Call connect() first.');
+      throw new Error("Redis subscriber not connected. Call connect() first.");
     }
     return this.subscriber;
   }
 
   getPublisher(): Redis {
     if (!this.publisher || !this.isConnected) {
-      throw new Error('Redis publisher not connected. Call connect() first.');
+      throw new Error("Redis publisher not connected. Call connect() first.");
     }
     return this.publisher;
   }
@@ -199,9 +198,9 @@ export class RedisConnectionManager {
     try {
       if (!this.redis) return false;
       const result = await this.redis.ping();
-      return result === 'PONG';
+      return result === "PONG";
     } catch (error) {
-      logger.error('Redis ping failed', error);
+      logger.error("Redis ping failed", error);
       return false;
     }
   }
@@ -214,41 +213,44 @@ export class RedisConnectionManager {
     return {
       isConnected: this.isConnected,
       reconnectAttempts: this.reconnectAttempts,
-      status: this.redis?.status || 'disconnected',
+      status: this.redis?.status || "disconnected",
     };
   }
 
-  async subscribe(channel: string, callback: (message: string) => void): Promise<void> {
+  async subscribe(
+    channel: string,
+    callback: (message: string) => void
+  ): Promise<void> {
     if (!this.subscriber || !this.isConnected) {
-      throw new Error('Redis subscriber not available');
+      throw new Error("Redis subscriber not available");
     }
 
     await this.subscriber.subscribe(channel);
-    this.subscriber.on('message', (receivedChannel, message) => {
+    this.subscriber.on("message", (receivedChannel, message) => {
       if (receivedChannel === channel) {
         callback(message);
       }
     });
 
-    logger.info('Subscribed to Redis channel', { channel });
+    logger.info("Subscribed to Redis channel", { channel });
   }
 
   async unsubscribe(channel: string): Promise<void> {
     if (!this.subscriber) {
-      throw new Error('Redis subscriber not available');
+      throw new Error("Redis subscriber not available");
     }
 
     await this.subscriber.unsubscribe(channel);
-    logger.info('Unsubscribed from Redis channel', { channel });
+    logger.info("Unsubscribed from Redis channel", { channel });
   }
 
   async publish(channel: string, message: string): Promise<number> {
     if (!this.publisher || !this.isConnected) {
-      throw new Error('Redis publisher not available');
+      throw new Error("Redis publisher not available");
     }
 
     const result = await this.publisher.publish(channel, message);
-    logger.debug('Published message to Redis channel', {
+    logger.debug("Published message to Redis channel", {
       channel,
       message: message.substring(0, 100),
       subscribers: result,
@@ -257,9 +259,13 @@ export class RedisConnectionManager {
     return result;
   }
 
-  async setWithExpiry(key: string, value: string, ttlSeconds: number): Promise<void> {
+  async setWithExpiry(
+    key: string,
+    value: string,
+    ttlSeconds: number
+  ): Promise<void> {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected');
+      throw new Error("Redis not connected");
     }
 
     await this.redis.setex(key, ttlSeconds, value);
@@ -267,7 +273,7 @@ export class RedisConnectionManager {
 
   async get(key: string): Promise<string | null> {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected');
+      throw new Error("Redis not connected");
     }
 
     return await this.redis.get(key);
@@ -275,7 +281,7 @@ export class RedisConnectionManager {
 
   async delete(key: string): Promise<number> {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected');
+      throw new Error("Redis not connected");
     }
 
     return await this.redis.del(key);
@@ -283,7 +289,7 @@ export class RedisConnectionManager {
 
   async exists(key: string): Promise<boolean> {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected');
+      throw new Error("Redis not connected");
     }
 
     const result = await this.redis.exists(key);
@@ -292,7 +298,7 @@ export class RedisConnectionManager {
 
   async hset(key: string, field: string, value: string): Promise<number> {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected');
+      throw new Error("Redis not connected");
     }
 
     return await this.redis.hset(key, field, value);
@@ -300,7 +306,7 @@ export class RedisConnectionManager {
 
   async hget(key: string, field: string): Promise<string | null> {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected');
+      throw new Error("Redis not connected");
     }
 
     return await this.redis.hget(key, field);
@@ -308,7 +314,7 @@ export class RedisConnectionManager {
 
   async hgetall(key: string): Promise<Record<string, string>> {
     if (!this.redis || !this.isConnected) {
-      throw new Error('Redis not connected');
+      throw new Error("Redis not connected");
     }
 
     return await this.redis.hgetall(key);

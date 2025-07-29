@@ -12,6 +12,7 @@ This repository contains a complete server/client architecture:
 ### Hot-Join Design Philosophy
 
 The system is designed for dynamic worker participation:
+
 - **Central Server**: Always-on coordinator that receives inference requests and manages job distribution
 - **Worker Clients**: Can join/leave the network at any time without disrupting the system
 - **Intelligent Job Routing**: Server automatically routes jobs to available workers based on model availability and current load
@@ -20,6 +21,7 @@ The system is designed for dynamic worker participation:
 ### Ollama API Compatibility
 
 LLMama provides **full Ollama API compatibility** under the `/ollama` route:
+
 - Use existing Ollama clients without modification
 - All Ollama endpoints supported (`/api/generate`, `/api/chat`, `/api/tags`, etc.)
 - Transparent load balancing across distributed workers
@@ -28,11 +30,13 @@ LLMama provides **full Ollama API compatibility** under the `/ollama` route:
 ## Prerequisites
 
 ### For the Central Server (Always-On Machine)
+
 - **Node.js** (v18 or higher)
 - **Redis** server
 - **npm** package manager
 
 ### For Worker Clients (Hot-Join Machines)
+
 - **Node.js** (v18 or higher)
 - **Ollama** installed and running locally
 - **npm** package manager
@@ -53,6 +57,7 @@ cd ../client && npm install
 ### Install Prerequisites
 
 #### Redis (Server Machine Only)
+
 ```bash
 # macOS (using Homebrew)
 brew install redis
@@ -63,6 +68,7 @@ docker run -d -p 6379:6379 --name gridllm-redis redis:7-alpine
 ```
 
 #### Ollama (Worker Machines)
+
 ```bash
 # macOS
 curl -fsSL https://ollama.com/install.sh | sh
@@ -90,6 +96,7 @@ npm run dev
 ```
 
 The server starts on port 4000 by default and provides:
+
 - Inference API at `http://localhost:4000/inference`
 - **Ollama API at `http://localhost:4000/ollama`** (full compatibility)
 - Health monitoring at `http://localhost:4000/health`
@@ -98,7 +105,7 @@ The server starts on port 4000 by default and provides:
 ### 2. Start Worker Clients
 
 ```bash
-# Using Makefile (recommended)  
+# Using Makefile (recommended)
 make run-client
 
 # Or manually
@@ -108,6 +115,7 @@ npm run dev
 ```
 
 Workers automatically:
+
 - Connect to the server
 - Register available Ollama models
 - Start processing assigned jobs
@@ -117,6 +125,7 @@ Workers automatically:
 Send requests to the server (not individual workers):
 
 #### Using LLMama Native API
+
 ```bash
 # Basic inference request
 curl -X POST http://localhost:4000/inference \
@@ -135,6 +144,7 @@ curl http://localhost:4000/health/workers
 ```
 
 #### Using Ollama-Compatible API
+
 ```bash
 # Generate text completion (just like Ollama!)
 curl http://localhost:4000/ollama/api/generate -d '{
@@ -145,7 +155,7 @@ curl http://localhost:4000/ollama/api/generate -d '{
 
 # Chat completion
 curl http://localhost:4000/ollama/api/chat -d '{
-  "model": "llama3.2", 
+  "model": "llama3.2",
   "messages": [
     {"role": "user", "content": "Hello!"}
   ],
@@ -275,7 +285,7 @@ make run-server
 # Terminal 2: Start worker 1 (MacBook)
 WORKER_ID=macbook-worker make run-client
 
-# Terminal 3: Start worker 2 (Desktop) 
+# Terminal 3: Start worker 2 (Desktop)
 WORKER_ID=desktop-worker PORT=3003 make run-client
 
 # Check all workers
@@ -293,7 +303,7 @@ curl http://localhost:4000/health
 # Connected workers
 curl http://localhost:4000/health/workers
 
-# Job queue status  
+# Job queue status
 curl http://localhost:4000/health/jobs
 
 # Available models across all workers
@@ -318,20 +328,24 @@ curl http://localhost:3002/health/jobs
 ### Common Issues
 
 **1. "Model not available on any worker"**
+
 - Ensure at least one worker is connected: `curl http://localhost:4000/health/workers`
 - Check if worker has the requested model: `curl http://localhost:3002/health/capabilities`
 - Verify Ollama is running: `ollama list`
 
 **2. Worker connection failures**
+
 - Check Redis is running: `redis-cli ping`
 - Verify Redis connection settings in `.env`
 - Check server logs: `make logs-server`
 
 **3. Port conflicts**
+
 - Change ports in `.env` files
 - Or kill conflicting processes: `lsof -ti:PORT | xargs kill`
 
 **4. Ollama connection errors**
+
 - Ensure Ollama is running: `curl http://localhost:11434/api/version`
 - Check Ollama host/port in client `.env`
 
@@ -362,7 +376,7 @@ tail -f client/logs/error.log
 │   └── .env.example
 ├── client/                 # Hot-join worker client
 │   ├── src/
-│   │   ├── config/        # Client configuration  
+│   │   ├── config/        # Client configuration
 │   │   ├── services/      # Worker services (Ollama, WorkerClient)
 │   │   ├── routes/        # Health endpoints
 │   │   └── index.ts       # Client entry point
@@ -406,10 +420,11 @@ cd client && npm start
 ### Inference API
 
 **POST** `/inference`
+
 ```json
 {
   "model": "llama3.2",
-  "prompt": "Your prompt here", 
+  "prompt": "Your prompt here",
   "priority": "medium",
   "timeout": 60000
 }
@@ -436,5 +451,5 @@ MIT License - see LICENSE file for details.
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/amazing-feature`
 3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature` 
+4. Push to the branch: `git push origin feature/amazing-feature`
 5. Open a Pull Request

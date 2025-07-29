@@ -11,7 +11,7 @@ export interface InferenceRequest {
     stop?: string[];
     seed?: number;
   };
-  priority: 'high' | 'medium' | 'low';
+  priority: "high" | "medium" | "low";
   timeout?: number;
   metadata?: Record<string, any>;
 }
@@ -53,7 +53,7 @@ export interface NodeCapabilities {
   workerId: string;
   availableModels: OllamaModel[];
   systemResources: SystemResources;
-  performanceTier: 'high' | 'medium' | 'low';
+  performanceTier: "high" | "medium" | "low";
   maxConcurrentTasks: number;
   supportedFormats: string[];
   lastUpdated: Date;
@@ -74,7 +74,13 @@ export interface TaskJob {
   id: string;
   request: InferenceRequest;
   assignedWorkerId?: string;
-  status: 'pending' | 'assigned' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status:
+    | "pending"
+    | "assigned"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled";
   createdAt: Date;
   startedAt?: Date;
   completedAt?: Date;
@@ -86,11 +92,11 @@ export interface TaskJob {
 
 export interface WorkerStatus {
   id: string;
-  status: 'online' | 'offline' | 'busy' | 'error';
+  status: "online" | "offline" | "busy" | "error";
   currentJobs: string[];
   capabilities: NodeCapabilities;
   lastHeartbeat: Date;
-  connectionHealth: 'healthy' | 'degraded' | 'poor';
+  connectionHealth: "healthy" | "degraded" | "poor";
 }
 
 export interface BrokerConnection {
@@ -101,7 +107,7 @@ export interface BrokerConnection {
 }
 
 export interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: "healthy" | "degraded" | "unhealthy";
   checks: {
     ollama: boolean;
     redis: boolean;

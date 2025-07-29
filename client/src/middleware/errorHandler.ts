@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { logger } from '@/utils/logger';
+import { Request, Response, NextFunction } from "express";
+import { logger } from "@/utils/logger";
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -15,7 +15,7 @@ export const errorHandler = (
   const statusCode = error.statusCode || 500;
   const isOperational = error.isOperational || false;
 
-  logger.error('Error occurred', {
+  logger.error("Error occurred", {
     error: error.message,
     stack: error.stack,
     statusCode,
@@ -26,9 +26,10 @@ export const errorHandler = (
   });
 
   // Don't leak error details in production
-  const message = process.env.NODE_ENV === 'production' && !isOperational
-    ? 'Internal Server Error'
-    : error.message;
+  const message =
+    process.env.NODE_ENV === "production" && !isOperational
+      ? "Internal Server Error"
+      : error.message;
 
   res.status(statusCode).json({
     error: {
@@ -41,7 +42,10 @@ export const errorHandler = (
   });
 };
 
-export const createError = (message: string, statusCode: number = 500): AppError => {
+export const createError = (
+  message: string,
+  statusCode: number = 500
+): AppError => {
   const error = new Error(message) as AppError;
   error.statusCode = statusCode;
   error.isOperational = true;

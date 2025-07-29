@@ -3,7 +3,7 @@ export interface NodeCapabilities {
   workerId: string;
   availableModels: OllamaModel[];
   systemResources: SystemResources;
-  performanceTier: 'high' | 'medium' | 'low';
+  performanceTier: "high" | "medium" | "low";
   maxConcurrentTasks: number;
   supportedFormats: string[];
   lastUpdated: Date;
@@ -42,21 +42,21 @@ export interface OllamaModel {
 export interface WorkerInfo {
   workerId: string;
   capabilities: NodeCapabilities;
-  status: 'online' | 'offline' | 'busy' | 'error';
+  status: "online" | "offline" | "busy" | "error";
   currentJobs: number;
   lastHeartbeat: Date;
   registeredAt: Date;
   totalJobsProcessed: number;
-  connectionHealth: 'healthy' | 'degraded' | 'unhealthy';
+  connectionHealth: "healthy" | "degraded" | "unhealthy";
 }
 
 export interface WorkerStatus {
   workerId: string;
-  status: 'idle' | 'busy' | 'error' | 'offline';
+  status: "idle" | "busy" | "error" | "offline";
   currentJobs: number;
   maxJobs: number;
   systemResources: SystemResources;
-  connectionHealth: 'healthy' | 'degraded' | 'unhealthy';
+  connectionHealth: "healthy" | "degraded" | "unhealthy";
   lastUpdated: Date;
 }
 
@@ -75,7 +75,7 @@ export interface InferenceRequest {
     seed?: number;
     [key: string]: any;
   };
-  priority?: 'high' | 'medium' | 'low';
+  priority?: "high" | "medium" | "low";
   timeout?: number;
   metadata?: Record<string, any>;
 }
@@ -107,7 +107,7 @@ export interface JobAssignment {
 // Server Types
 export interface ServerStatus {
   serverId: string;
-  status: 'running' | 'maintenance' | 'error';
+  status: "running" | "maintenance" | "error";
   connectedWorkers: number;
   activeJobs: number;
   queuedJobs: number;
@@ -125,14 +125,20 @@ export interface LLMamaError extends Error {
 
 // Events
 export interface WorkerEvent {
-  type: 'registered' | 'unregistered' | 'heartbeat' | 'status_changed' | 'job_completed' | 'job_failed';
+  type:
+    | "registered"
+    | "unregistered"
+    | "heartbeat"
+    | "status_changed"
+    | "job_completed"
+    | "job_failed";
   workerId: string;
   timestamp: Date;
   data?: any;
 }
 
 export interface JobEvent {
-  type: 'created' | 'assigned' | 'started' | 'completed' | 'failed' | 'timeout';
+  type: "created" | "assigned" | "started" | "completed" | "failed" | "timeout";
   jobId: string;
   workerId?: string;
   timestamp: Date;
@@ -141,7 +147,7 @@ export interface JobEvent {
 
 // Ollama-specific types
 export interface OllamaChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
   thinking?: string;
   images?: string[];

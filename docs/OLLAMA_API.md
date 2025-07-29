@@ -5,11 +5,13 @@ The LLMama server provides a complete Ollama API-compatible interface under the 
 ## Base URL
 
 All Ollama API endpoints are available under:
+
 ```
 http://[host]:[port]/ollama
 ```
 
 For example, if your LLMama server is running on `localhost:3001`, the Ollama API base would be:
+
 ```
 http://localhost:3001/ollama
 ```
@@ -17,68 +19,82 @@ http://localhost:3001/ollama
 ## Supported Endpoints
 
 ### Generate a Completion
+
 - **POST** `/ollama/api/generate`
 - Generate text completions using a specified model
 - Supports streaming and non-streaming responses
 - Compatible with all Ollama generation parameters
 
 ### Generate a Chat Completion
+
 - **POST** `/ollama/api/chat`
 - Generate chat-based completions with conversation history
 - Supports tool calling and structured outputs
 - Compatible with all Ollama chat parameters
 
 ### List Local Models
+
 - **GET** `/ollama/api/tags`
 - List all available models across the worker network
 - Returns models in Ollama-compatible format
 
 ### Show Model Information
+
 - **POST** `/ollama/api/show`
 - Get detailed information about a specific model
 - Returns modelfile, parameters, and metadata
 
 ### Create a Model
+
 - **POST** `/ollama/api/create`
 - Create new models from existing ones or files
 - Supports model copying, quantization, and custom configurations
 
 ### Copy a Model
+
 - **POST** `/ollama/api/copy`
 - Copy an existing model with a new name
 
 ### Delete a Model
+
 - **DELETE** `/ollama/api/delete`
 - Remove a model from the system
 
 ### Pull a Model
+
 - **POST** `/ollama/api/pull`
 - Download models from remote repositories
 - Supports streaming progress updates
 
 ### Push a Model
+
 - **POST** `/ollama/api/push`
 - Upload models to remote repositories
 - Supports streaming progress updates
 
 ### Generate Embeddings
+
 - **POST** `/ollama/api/embed`
 - Generate vector embeddings for text input
 - Supports single and batch processing
 
 ### List Running Models
+
 - **GET** `/ollama/api/ps`
 - Show currently loaded models across workers
 
 ### Version Information
+
 - **GET** `/ollama/api/version`
 - Get API version information
 
 ### Legacy Embeddings Endpoint
+
 - **POST** `/ollama/api/embeddings`
 - Legacy embedding endpoint for backward compatibility
 
 ### Blob Management
+
 - **HEAD** `/ollama/api/blobs/:digest`
 - Check if a blob exists
 - **POST** `/ollama/api/blobs/:digest`
@@ -138,6 +154,7 @@ While maintaining full Ollama API compatibility, LLMama adds distributed system 
 ## Streaming Responses
 
 LLMama supports Ollama's streaming protocol:
+
 - Set `"stream": true` for real-time token streaming
 - Responses are sent as newline-delimited JSON
 - Final response includes complete metadata
@@ -145,6 +162,7 @@ LLMama supports Ollama's streaming protocol:
 ## Error Handling
 
 Error responses maintain Ollama compatibility:
+
 - HTTP status codes match Ollama behavior
 - Error messages are in Ollama format
 - Validation errors provide detailed feedback
@@ -152,6 +170,7 @@ Error responses maintain Ollama compatibility:
 ## Model Management
 
 Models are managed across the distributed worker network:
+
 - Any model available on any worker can be used
 - Model availability is checked in real-time
 - Load balancing ensures optimal resource utilization
@@ -167,6 +186,7 @@ To migrate from Ollama to LLMama:
 ## Performance
 
 LLMama's distributed architecture provides:
+
 - Higher throughput through parallel processing
 - Better resource utilization across multiple machines
 - Automatic load balancing for optimal performance

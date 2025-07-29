@@ -1,20 +1,20 @@
-import { Queue, Worker, Job, QueueEvents } from 'bullmq';
-import { config } from '@/config';
-import { logger } from '@/utils/logger';
-import { RedisConnectionManager } from './RedisConnectionManager';
-import { 
-  InferenceRequest, 
-  InferenceResponse, 
-  TaskJob, 
+import { Queue, Worker, Job, QueueEvents } from "bullmq";
+import { config } from "@/config";
+import { logger } from "@/utils/logger";
+import { RedisConnectionManager } from "./RedisConnectionManager";
+import {
+  InferenceRequest,
+  InferenceResponse,
+  TaskJob,
   NodeCapabilities,
-  WorkerStatus 
-} from '@/types';
+  WorkerStatus,
+} from "@/types";
 
 export interface WorkQueueOptions {
   concurrency?: number;
   attempts?: number;
   backoff?: {
-    type: 'exponential' | 'fixed';
+    type: "exponential" | "fixed";
     delay: number;
   };
 }
@@ -31,10 +31,12 @@ export class WorkQueueService {
   constructor(
     private workerId: string,
     private capabilities: NodeCapabilities,
-    private onProcessJob: (job: Job<InferenceRequest>) => Promise<InferenceResponse>
+    private onProcessJob: (
+      job: Job<InferenceRequest>
+    ) => Promise<InferenceResponse>
   ) {
     this.redisManager = RedisConnectionManager.getInstance();
-    
+
     const connection = {
       host: config.redis.host,
       port: config.redis.port,
@@ -43,12 +45,12 @@ export class WorkQueueService {
     };
 
     // Initialize queue
-    this.taskQueue = new Queue('inference-tasks', {
+    this.taskQueue = new Queue("inference-tasks", {
       connection,
       defaultJobOptions: {
         attempts: config.tasks.retryAttempts,
         backoff: {
-          type: 'exponential',
+          type: "exponential",
           delay: config.tasks.retryDelay,
         },
         removeOnComplete: 100, // Keep last 100 completed jobs
@@ -57,28 +59,24 @@ export class WorkQueueService {
     });
 
     // Initialize worker
-    this.worker = new Worker(
-      'inference-tasks',
-      this.processTask.bind(this),
-      {
-        connection,
-        concurrency: config.worker.concurrency,
-        maxStalledCount: 1,
-        stalledInterval: 30000,
-      }
-    );
+    this.worker = new Worker("inference-tasks", this.processTask.bind(this), {
+      connection,
+      concurrency: config.worker.concurrency,
+      maxStalledCount: 1,
+      stalledInterval: 30000,
+    });
 
     // Initialize queue events
-    this.queueEvents = new QueueEvents('inference-tasks', { connection });
+    this.queueEvents = new QueueEvents("inference-tasks", { connection });
 
     this.setupEventHandlers();
   }
 
   private setupEventHandlers(): void {
     // Worker events
-    this.worker.on('completed', (job: Job, result: InferenceResponse) => {
+    this.worker.on("completed", (job: Job, result: InferenceResponse) => {
       this.processedJobs++;
-      logger.info('Job completed', {
+      logger.info("Job completed", {
         jobId: job.id,
         workerId: this.workerId,
         result: {
@@ -89,9 +87,9 @@ export class WorkQueueService {
       });
     });
 
-    this.worker.on('failed', (job: Job | undefined, error: Error) => {
+    this.worker.on("failed", (job: Job | undefined, error: Error) => {
       this.failedJobs++;
-      logger.error('Job failed', {
+      logger.error("Job failed", {
         jobId: job?.id,
         workerId: this.workerId,
         error: error.message,
@@ -99,38 +97,43 @@ export class WorkQueueService {
       });
     });
 
-    this.worker.on('error', (error: Error) => {
-      logger.error('Worker error', {
+    this.worker.on("error", (error: Error) => {
+      logger.error("Worker error", {
         workerId: this.workerId,
         error: error.message,
       });
     });
 
-    this.worker.on('stalled', (jobId: string) => {
-      logger.warn('Job stalled', {
+    this.worker.on("stalled", (jobId: string) => {
+      logger.warn("Job stalled", {
         jobId,
         workerId: this.workerId,
       });
     });
 
     // Queue events
-    this.queueEvents.on('waiting', ({ jobId }: { jobId: string }) => {
-      logger.debug('Job waiting', { jobId });
+    this.queueEvents.on("waiting", ({ jobId }: { jobId: string }) => {
+      logger.debug("Job waiting", { jobId });
     });
 
-    this.queueEvents.on('active', ({ jobId }: { jobId: string }) => {
-      logger.debug('Job active', { jobId, workerId: this.workerId });
+    this.queueEvents.on("active", ({ jobId }: { jobId: string }) => {
+      logger.debug("Job active", { jobId, workerId: this.workerId });
     });
 
-    this.queueEvents.on('progress', ({ jobId, data }: { jobId: string; data: any }) => {
-      logger.debug('Job progress', { jobId, progress: data });
-    });
+    this.queueEvents.on(
+      "progress",
+      ({ jobId, data }: { jobId: string; data: any }) => {
+        logger.debug("Job progress", { jobId, progress: data });
+      }
+    );
   }
 
-  private async processTask(job: Job<InferenceRequest>): Promise<InferenceResponse> {
+  private async processTask(
+    job: Job<InferenceRequest>
+  ): Promise<InferenceResponse> {
     const request = job.data;
-    
-    logger.info('Processing inference task', {
+
+    logger.info("Processing inference task", {
       jobId: job.id,
       workerId: this.workerId,
       model: request.model,
@@ -143,7 +146,7 @@ export class WorkQueueService {
 
       // Validate that we can handle this model
       const canHandle = this.capabilities.availableModels.some(
-        model => model.name === request.model
+        (model) => model.name === request.model
       );
 
       if (!canHandle) {
@@ -157,7 +160,7 @@ export class WorkQueueService {
 
       await job.updateProgress(100);
 
-      logger.info('Inference task completed', {
+      logger.info("Inference task completed", {
         jobId: job.id,
         workerId: this.workerId,
         duration: result.total_duration,
@@ -165,10 +168,10 @@ export class WorkQueueService {
 
       return result;
     } catch (error) {
-      logger.error('Inference task failed', {
+      logger.error("Inference task failed", {
         jobId: job.id,
         workerId: this.workerId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       });
       throw error;
     }
@@ -176,26 +179,26 @@ export class WorkQueueService {
 
   async start(): Promise<void> {
     try {
-      logger.info('Starting work queue service', {
+      logger.info("Starting work queue service", {
         workerId: this.workerId,
         concurrency: config.worker.concurrency,
       });
 
       this.isRunning = true;
-      
+
       // Register worker with broker
       await this.registerWorker();
 
-      logger.info('Work queue service started successfully');
+      logger.info("Work queue service started successfully");
     } catch (error) {
-      logger.error('Failed to start work queue service', error);
+      logger.error("Failed to start work queue service", error);
       throw error;
     }
   }
 
   async stop(): Promise<void> {
     try {
-      logger.info('Stopping work queue service', {
+      logger.info("Stopping work queue service", {
         workerId: this.workerId,
       });
 
@@ -209,9 +212,9 @@ export class WorkQueueService {
       // Unregister worker
       await this.unregisterWorker();
 
-      logger.info('Work queue service stopped successfully');
+      logger.info("Work queue service stopped successfully");
     } catch (error) {
-      logger.error('Error stopping work queue service', error);
+      logger.error("Error stopping work queue service", error);
       throw error;
     }
   }
@@ -223,22 +226,18 @@ export class WorkQueueService {
     try {
       const priority = this.getPriorityWeight(request.priority);
 
-      const job = await this.taskQueue.add(
-        'inference',
-        request,
-        {
-          priority,
-          attempts: options.attempts || config.tasks.retryAttempts,
-          backoff: options.backoff || {
-            type: 'exponential',
-            delay: config.tasks.retryDelay,
-          },
-          delay: 0,
-          jobId: request.id,
-        }
-      );
+      const job = await this.taskQueue.add("inference", request, {
+        priority,
+        attempts: options.attempts || config.tasks.retryAttempts,
+        backoff: options.backoff || {
+          type: "exponential",
+          delay: config.tasks.retryDelay,
+        },
+        delay: 0,
+        jobId: request.id,
+      });
 
-      logger.info('Job added to queue', {
+      logger.info("Job added to queue", {
         jobId: job.id,
         priority: request.priority,
         model: request.model,
@@ -246,9 +245,9 @@ export class WorkQueueService {
 
       return job;
     } catch (error) {
-      logger.error('Failed to add job to queue', {
+      logger.error("Failed to add job to queue", {
         requestId: request.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       });
       throw error;
     }
@@ -262,7 +261,7 @@ export class WorkQueueService {
     const job = await this.getJob(jobId);
     if (job) {
       await job.remove();
-      logger.info('Job removed from queue', { jobId });
+      logger.info("Job removed from queue", { jobId });
     }
   }
 
@@ -274,11 +273,11 @@ export class WorkQueueService {
     delayed: number;
   }> {
     const counts = await this.taskQueue.getJobCounts(
-      'waiting',
-      'active',
-      'completed',
-      'failed',
-      'delayed'
+      "waiting",
+      "active",
+      "completed",
+      "failed",
+      "delayed"
     );
 
     return {
@@ -296,14 +295,17 @@ export class WorkQueueService {
 
     return {
       id: this.workerId,
-      status: this.isRunning ? 
-        (activeJobs.length > 0 ? 'busy' : 'online') : 
-        'offline',
-      currentJobs: activeJobs.map((job: Job) => job.id || ''),
+      status: this.isRunning
+        ? activeJobs.length > 0
+          ? "busy"
+          : "online"
+        : "offline",
+      currentJobs: activeJobs.map((job: Job) => job.id || ""),
       capabilities: this.capabilities,
       lastHeartbeat: new Date(),
-      connectionHealth: this.redisManager.getConnectionStatus().isConnected ? 
-        'healthy' : 'poor',
+      connectionHealth: this.redisManager.getConnectionStatus().isConnected
+        ? "healthy"
+        : "poor",
     };
   }
 
@@ -312,29 +314,29 @@ export class WorkQueueService {
       const workerData = {
         id: this.workerId,
         capabilities: this.capabilities,
-        status: 'online',
+        status: "online",
         registeredAt: new Date().toISOString(),
         lastHeartbeat: new Date().toISOString(),
       };
 
       await this.redisManager.hset(
-        'workers',
+        "workers",
         this.workerId,
         JSON.stringify(workerData)
       );
 
       await this.redisManager.publish(
-        'worker:registered',
+        "worker:registered",
         JSON.stringify(workerData)
       );
 
-      logger.info('Worker registered with broker', {
+      logger.info("Worker registered with broker", {
         workerId: this.workerId,
       });
     } catch (error) {
-      logger.error('Failed to register worker', {
+      logger.error("Failed to register worker", {
         workerId: this.workerId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       });
       throw error;
     }
@@ -343,24 +345,27 @@ export class WorkQueueService {
   private async unregisterWorker(): Promise<void> {
     try {
       await this.redisManager.delete(`workers:${this.workerId}`);
-      
+
       await this.redisManager.publish(
-        'worker:unregistered',
-        JSON.stringify({ id: this.workerId, timestamp: new Date().toISOString() })
+        "worker:unregistered",
+        JSON.stringify({
+          id: this.workerId,
+          timestamp: new Date().toISOString(),
+        })
       );
 
-      logger.info('Worker unregistered from broker', {
+      logger.info("Worker unregistered from broker", {
         workerId: this.workerId,
       });
     } catch (error) {
-      logger.error('Failed to unregister worker', {
+      logger.error("Failed to unregister worker", {
         workerId: this.workerId,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   }
 
-  private getPriorityWeight(priority: 'high' | 'medium' | 'low'): number {
+  private getPriorityWeight(priority: "high" | "medium" | "low"): number {
     return config.tasks.priorityWeights[priority] || 1;
   }
 
@@ -380,17 +385,17 @@ export class WorkQueueService {
 
   async pause(): Promise<void> {
     await this.worker.pause();
-    logger.info('Worker paused', { workerId: this.workerId });
+    logger.info("Worker paused", { workerId: this.workerId });
   }
 
   async resume(): Promise<void> {
     await this.worker.resume();
-    logger.info('Worker resumed', { workerId: this.workerId });
+    logger.info("Worker resumed", { workerId: this.workerId });
   }
 
   async clean(grace: number = 5000): Promise<string[]> {
-    const jobs = await this.taskQueue.clean(grace, 100, 'completed');
-    logger.info('Cleaned completed jobs', {
+    const jobs = await this.taskQueue.clean(grace, 100, "completed");
+    logger.info("Cleaned completed jobs", {
       workerId: this.workerId,
       cleanedCount: jobs.length,
     });

@@ -1,14 +1,14 @@
-import { Router, Request, Response } from 'express';
-import { config } from '@/config';
-import { logger } from '@/utils/logger';
+import { Router, Request, Response } from "express";
+import { config } from "@/config";
+import { logger } from "@/utils/logger";
 
 const router = Router();
 
 // Basic health check
-router.get('/', (req: Request, res: Response) => {
+router.get("/", (req: Request, res: Response) => {
   res.json({
-    status: 'ok',
-    service: 'llmama-worker',
+    status: "ok",
+    service: "llmama-worker",
     workerId: config.worker.id,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
@@ -16,30 +16,30 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // Liveness probe
-router.get('/live', (req: Request, res: Response) => {
+router.get("/live", (req: Request, res: Response) => {
   res.json({
-    status: 'alive',
+    status: "alive",
     timestamp: new Date().toISOString(),
   });
 });
 
 // Readiness probe
-router.get('/ready', (req: Request, res: Response) => {
+router.get("/ready", (req: Request, res: Response) => {
   // Simple readiness check - if the process is running, we're ready
   res.json({
-    status: 'ready',
+    status: "ready",
     timestamp: new Date().toISOString(),
   });
 });
 
 // System info
-router.get('/system', (req: Request, res: Response) => {
+router.get("/system", (req: Request, res: Response) => {
   const memUsage = process.memoryUsage();
-  
+
   res.json({
     worker: {
       id: config.worker.id,
-      status: 'running',
+      status: "running",
       uptime: process.uptime(),
     },
     system: {
