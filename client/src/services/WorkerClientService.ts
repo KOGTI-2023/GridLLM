@@ -1,15 +1,15 @@
-import { EventEmitter } from 'events';
-import { config } from '@/config';
-import { logger } from '@/utils/logger';
-import { RedisConnectionManager } from './RedisConnectionManager';
-import { OllamaService } from './OllamaService';
-import { 
-  NodeCapabilities, 
-  WorkerStatus, 
+import { EventEmitter } from "events";
+import { config } from "@/config";
+import { logger } from "@/utils/logger";
+import { RedisConnectionManager } from "./RedisConnectionManager";
+import { OllamaService } from "./OllamaService";
+import {
+  NodeCapabilities,
+  WorkerStatus,
   SystemResources,
   InferenceRequest,
-  InferenceResponse
-} from '@/types';
+  InferenceResponse,
+} from "@/types";
 
 export class WorkerClientService extends EventEmitter {
   private redisManager: RedisConnectionManager;
@@ -30,15 +30,15 @@ export class WorkerClientService extends EventEmitter {
 
   async initialize(): Promise<void> {
     try {
-      logger.info('Initializing worker client service');
+      logger.info("Initializing worker client service");
 
       // Connect to server's Redis
       await this.redisManager.connect();
-      
+
       // Check Ollama health
       const ollamaHealthy = await this.ollamaService.checkHealth();
       if (!ollamaHealthy) {
-        throw new Error('Ollama service is not available');
+        throw new Error("Ollama service is not available");
       }
 
       // Gather node capabilities
@@ -47,9 +47,9 @@ export class WorkerClientService extends EventEmitter {
       // Setup event listeners
       this.setupEventListeners();
 
-      logger.info('Worker client service initialized successfully');
+      logger.info("Worker client service initialized successfully");
     } catch (error) {
-      logger.error('Failed to initialize worker client service', error);
+      logger.error("Failed to initialize worker client service", error);
       throw error;
     }
   }
@@ -57,10 +57,10 @@ export class WorkerClientService extends EventEmitter {
   async start(): Promise<void> {
     try {
       if (!this.capabilities) {
-        throw new Error('Service not initialized. Call initialize() first.');
+        throw new Error("Service not initialized. Call initialize() first.");
       }
 
-      logger.info('Starting worker client service');
+      logger.info("Starting worker client service");
 
       // Connect to server
       await this.connectToServer();
@@ -75,18 +75,18 @@ export class WorkerClientService extends EventEmitter {
       this.startJobProcessing();
 
       this.isConnected = true;
-      this.emit('connected');
+      this.emit("connected");
 
-      logger.info('Worker client service started successfully');
+      logger.info("Worker client service started successfully");
     } catch (error) {
-      logger.error('Failed to start worker client service', error);
+      logger.error("Failed to start worker client service", error);
       throw error;
     }
   }
 
   async stop(): Promise<void> {
     try {
-      logger.info('Stopping worker client service');
+      logger.info("Stopping worker client service");
 
       this.isConnected = false;
 
@@ -103,8 +103,8 @@ export class WorkerClientService extends EventEmitter {
 
       // Wait for current job to complete
       while (this.isProcessingJob) {
-        logger.info('Waiting for current job to complete...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        logger.info("Waiting for current job to complete...");
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       // Disconnect from server
@@ -113,18 +113,18 @@ export class WorkerClientService extends EventEmitter {
       // Disconnect from Redis
       await this.redisManager.disconnect();
 
-      this.emit('disconnected');
+      this.emit("disconnected");
 
-      logger.info('Worker client service stopped successfully');
+      logger.info("Worker client service stopped successfully");
     } catch (error) {
-      logger.error('Error stopping worker client service', error);
+      logger.error("Error stopping worker client service", error);
       throw error;
     }
   }
 
   private async gatherNodeCapabilities(): Promise<NodeCapabilities> {
     try {
-      logger.info('Gathering node capabilities');
+      logger.info("Gathering node capabilities");
 
       const models = await this.ollamaService.getAvailableModels();
       const systemResources = await this.ollamaService.getSystemResources();
@@ -135,11 +135,11 @@ export class WorkerClientService extends EventEmitter {
         systemResources,
         performanceTier: this.determinePerformanceTier(systemResources),
         maxConcurrentTasks: config.worker.maxConcurrentJobs,
-        supportedFormats: ['json', 'text'],
+        supportedFormats: ["json", "text"],
         lastUpdated: new Date(),
       };
 
-      logger.info('Node capabilities gathered', {
+      logger.info("Node capabilities gathered", {
         workerId: capabilities.workerId,
         modelCount: capabilities.availableModels.length,
         performanceTier: capabilities.performanceTier,
@@ -148,26 +148,38 @@ export class WorkerClientService extends EventEmitter {
 
       return capabilities;
     } catch (error) {
-      logger.error('Failed to gather node capabilities', error);
+      logger.error("Failed to gather node capabilities", error);
       throw error;
     }
   }
 
-  private determinePerformanceTier(resources: SystemResources): 'high' | 'medium' | 'low' {
-    const cpuScore = resources.cpuCores >= 8 ? 3 : resources.cpuCores >= 4 ? 2 : 1;
-    const memoryScore = resources.totalMemoryMB >= 16384 ? 3 : resources.totalMemoryMB >= 8192 ? 2 : 1;
-    const gpuScore = resources.gpuMemoryMB ? (resources.gpuMemoryMB >= 16384 ? 3 : 2) : 0;
+  private determinePerformanceTier(
+    resources: SystemResources
+  ): "high" | "medium" | "low" {
+    const cpuScore =
+      resources.cpuCores >= 8 ? 3 : resources.cpuCores >= 4 ? 2 : 1;
+    const memoryScore =
+      resources.totalMemoryMB >= 16384
+        ? 3
+        : resources.totalMemoryMB >= 8192
+          ? 2
+          : 1;
+    const gpuScore = resources.gpuMemoryMB
+      ? resources.gpuMemoryMB >= 16384
+        ? 3
+        : 2
+      : 0;
 
     const totalScore = cpuScore + memoryScore + gpuScore;
 
-    if (totalScore >= 7) return 'high';
-    if (totalScore >= 4) return 'medium';
-    return 'low';
+    if (totalScore >= 7) return "high";
+    if (totalScore >= 4) return "medium";
+    return "low";
   }
 
   private async connectToServer(): Promise<void> {
     try {
-      logger.info('Connecting to server');
+      logger.info("Connecting to server");
 
       // Register with server
       await this.registerWithServer();
@@ -176,9 +188,9 @@ export class WorkerClientService extends EventEmitter {
       await this.subscribeToJobChannel();
 
       this.reconnectAttempts = 0;
-      logger.info('Connected to server successfully');
+      logger.info("Connected to server successfully");
     } catch (error) {
-      logger.error('Failed to connect to server', error);
+      logger.error("Failed to connect to server", error);
       await this.handleConnectionError();
       throw error;
     }
@@ -186,33 +198,33 @@ export class WorkerClientService extends EventEmitter {
 
   private async registerWithServer(): Promise<void> {
     if (!this.capabilities) {
-      throw new Error('Node capabilities not available');
+      throw new Error("Node capabilities not available");
     }
 
     try {
       const registrationData = {
         workerId: config.worker.id,
         capabilities: this.capabilities,
-        status: 'online',
+        status: "online",
         registeredAt: new Date().toISOString(),
       };
 
       await this.redisManager.hset(
-        'workers',
+        "workers",
         config.worker.id,
         JSON.stringify(registrationData)
       );
 
       await this.redisManager.publish(
-        'worker:registered',
+        "worker:registered",
         JSON.stringify(registrationData)
       );
 
-      logger.info('Registered with server', {
+      logger.info("Registered with server", {
         workerId: config.worker.id,
       });
     } catch (error) {
-      logger.error('Failed to register with server', error);
+      logger.error("Failed to register with server", error);
       throw error;
     }
   }
@@ -225,9 +237,9 @@ export class WorkerClientService extends EventEmitter {
         this.handleJobMessage.bind(this)
       );
 
-      logger.info('Subscribed to job channel');
+      logger.info("Subscribed to job channel");
     } catch (error) {
-      logger.error('Failed to subscribe to job channel', error);
+      logger.error("Failed to subscribe to job channel", error);
       throw error;
     }
   }
@@ -236,7 +248,7 @@ export class WorkerClientService extends EventEmitter {
     try {
       if (!this.isConnected) return;
 
-      logger.info('Disconnecting from server');
+      logger.info("Disconnecting from server");
 
       // Unregister from server
       await this.unregisterFromServer();
@@ -244,52 +256,53 @@ export class WorkerClientService extends EventEmitter {
       // Unsubscribe from channels
       await this.redisManager.unsubscribe(`worker:${config.worker.id}:job`);
 
-      logger.info('Disconnected from server');
+      logger.info("Disconnected from server");
     } catch (error) {
-      logger.error('Error disconnecting from server', error);
+      logger.error("Error disconnecting from server", error);
     }
   }
 
   private async unregisterFromServer(): Promise<void> {
     try {
       await this.redisManager.delete(`workers:${config.worker.id}`);
-      
+
       await this.redisManager.publish(
-        'worker:unregistered',
+        "worker:unregistered",
         JSON.stringify({
           workerId: config.worker.id,
           timestamp: new Date().toISOString(),
         })
       );
 
-      logger.info('Unregistered from server');
+      logger.info("Unregistered from server");
     } catch (error) {
-      logger.error('Failed to unregister from server', error);
+      logger.error("Failed to unregister from server", error);
     }
   }
 
   private setupEventListeners(): void {
     // Handle Redis connection events
-    this.redisManager.getMainConnection().on('error', (error) => {
-      logger.error('Redis connection error', error);
+    this.redisManager.getMainConnection().on("error", (error) => {
+      logger.error("Redis connection error", error);
       this.handleConnectionError();
     });
 
-    this.redisManager.getMainConnection().on('close', () => {
-      logger.warn('Redis connection closed');
+    this.redisManager.getMainConnection().on("close", () => {
+      logger.warn("Redis connection closed");
       this.handleConnectionError();
     });
   }
 
   private async handleConnectionError(): Promise<void> {
     this.isConnected = false;
-    this.emit('connection_error');
+    this.emit("connection_error");
 
     if (this.reconnectAttempts < config.server.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      const delay = config.server.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+      const delay =
+        config.server.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
-      logger.info('Attempting to reconnect to server', {
+      logger.info("Attempting to reconnect to server", {
         attempt: this.reconnectAttempts,
         delay,
       });
@@ -298,15 +311,15 @@ export class WorkerClientService extends EventEmitter {
         try {
           await this.connectToServer();
           this.isConnected = true;
-          this.emit('reconnected');
+          this.emit("reconnected");
         } catch (error) {
-          logger.error('Reconnection attempt failed', error);
+          logger.error("Reconnection attempt failed", error);
           this.handleConnectionError();
         }
       }, delay);
     } else {
-      logger.error('Max reconnection attempts reached');
-      this.emit('max_reconnect_attempts_reached');
+      logger.error("Max reconnection attempts reached");
+      this.emit("max_reconnect_attempts_reached");
     }
   }
 
@@ -319,19 +332,19 @@ export class WorkerClientService extends EventEmitter {
       try {
         await this.sendHeartbeat();
       } catch (error) {
-        logger.error('Heartbeat failed', error);
+        logger.error("Heartbeat failed", error);
         this.handleConnectionError();
       }
     }, config.server.heartbeatInterval);
 
-    logger.info('Heartbeat started', {
+    logger.info("Heartbeat started", {
       interval: config.server.heartbeatInterval,
     });
   }
 
   private async sendHeartbeat(): Promise<void> {
     const status = this.getWorkerStatus();
-    
+
     const heartbeatData = {
       workerId: config.worker.id,
       status: status.status,
@@ -343,15 +356,15 @@ export class WorkerClientService extends EventEmitter {
     await this.redisManager.setWithExpiry(
       `heartbeat:${config.worker.id}`,
       JSON.stringify(heartbeatData),
-      config.server.heartbeatInterval * 2 / 1000 // TTL is 2x heartbeat interval
+      (config.server.heartbeatInterval * 2) / 1000 // TTL is 2x heartbeat interval
     );
 
     await this.redisManager.publish(
-      'worker:heartbeat',
+      "worker:heartbeat",
       JSON.stringify(heartbeatData)
     );
 
-    logger.debug('Heartbeat sent', { workerId: config.worker.id });
+    logger.debug("Heartbeat sent", { workerId: config.worker.id });
   }
 
   private startResourceMonitoring(): void {
@@ -363,11 +376,11 @@ export class WorkerClientService extends EventEmitter {
       try {
         await this.updateCapabilities();
       } catch (error) {
-        logger.error('Resource monitoring failed', error);
+        logger.error("Resource monitoring failed", error);
       }
     }, config.worker.resourceCheckInterval);
 
-    logger.info('Resource monitoring started', {
+    logger.info("Resource monitoring started", {
       interval: config.worker.resourceCheckInterval,
     });
   }
@@ -377,67 +390,67 @@ export class WorkerClientService extends EventEmitter {
 
     try {
       const systemResources = await this.ollamaService.getSystemResources();
-      
+
       // Update capabilities
       this.capabilities.systemResources = systemResources;
       this.capabilities.lastUpdated = new Date();
 
       // Update server with new capabilities
       await this.redisManager.hset(
-        'workers',
+        "workers",
         config.worker.id,
         JSON.stringify({
           workerId: config.worker.id,
           capabilities: this.capabilities,
-          status: this.isProcessingJob ? 'busy' : 'online',
+          status: this.isProcessingJob ? "busy" : "online",
           lastUpdated: new Date().toISOString(),
         })
       );
 
       // Publish status update
       await this.redisManager.publish(
-        'worker:status_update',
+        "worker:status_update",
         JSON.stringify({
           workerId: config.worker.id,
-          status: this.isProcessingJob ? 'busy' : 'online',
+          status: this.isProcessingJob ? "busy" : "online",
           currentJobs: this.currentJobs,
           systemResources,
         })
       );
     } catch (error) {
-      logger.error('Failed to update capabilities', error);
+      logger.error("Failed to update capabilities", error);
     }
   }
 
   private startJobProcessing(): void {
-    logger.info('Started job processing');
+    logger.info("Started job processing");
   }
 
   private async handleJobMessage(message: string): Promise<void> {
     try {
       const data = JSON.parse(message);
-      logger.debug('Received job message', { type: data.type });
+      logger.debug("Received job message", { type: data.type });
 
       switch (data.type) {
-        case 'job_assignment':
+        case "job_assignment":
           await this.processJobAssignment(data.job);
           break;
-        case 'job_cancellation':
+        case "job_cancellation":
           await this.handleJobCancellation(data.jobId);
           break;
         default:
-          logger.warn('Unknown job message type', { type: data.type });
+          logger.warn("Unknown job message type", { type: data.type });
       }
     } catch (error) {
-      logger.error('Failed to handle job message', { message, error });
+      logger.error("Failed to handle job message", { message, error });
     }
   }
 
   private async processJobAssignment(assignment: any): Promise<void> {
     const request: InferenceRequest = assignment.request;
-    
+
     if (this.isProcessingJob) {
-      logger.warn('Received job assignment while busy', { jobId: request.id });
+      logger.warn("Received job assignment while busy", { jobId: request.id });
       return;
     }
 
@@ -445,26 +458,30 @@ export class WorkerClientService extends EventEmitter {
     this.currentJobs = 1;
 
     try {
-      logger.info('Processing job assignment', {
+      logger.info("Processing job assignment", {
         jobId: request.id,
         model: request.model,
       });
 
       // Validate model availability
-      const isModelValid = await this.ollamaService.validateModel(request.model);
+      const isModelValid = await this.ollamaService.validateModel(
+        request.model
+      );
       if (!isModelValid) {
         throw new Error(`Model ${request.model} is not available`);
       }
 
       // Process inference
       let result: InferenceResponse | undefined;
-      
+
       if (request.stream) {
         // For streaming, collect the full response
-        let fullResponse = '';
-        for await (const chunk of this.ollamaService.generateStreamResponse(request)) {
+        let fullResponse = "";
+        for await (const chunk of this.ollamaService.generateStreamResponse(
+          request
+        )) {
           fullResponse += chunk.response;
-          
+
           if (chunk.done) {
             result = {
               id: request.id,
@@ -479,12 +496,12 @@ export class WorkerClientService extends EventEmitter {
       }
 
       if (!result) {
-        throw new Error('No result generated from inference');
+        throw new Error("No result generated from inference");
       }
 
       // Notify server of completion
       await this.redisManager.publish(
-        'job:completed',
+        "job:completed",
         JSON.stringify({
           jobId: request.id,
           workerId: config.worker.id,
@@ -504,24 +521,23 @@ export class WorkerClientService extends EventEmitter {
         })
       );
 
-      logger.info('Job completed successfully', {
+      logger.info("Job completed successfully", {
         jobId: request.id,
         model: request.model,
       });
-
     } catch (error) {
-      logger.error('Job processing failed', {
+      logger.error("Job processing failed", {
         jobId: request.id,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       });
 
       // Notify server of failure
       await this.redisManager.publish(
-        'job:failed',
+        "job:failed",
         JSON.stringify({
           jobId: request.id,
           workerId: config.worker.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : "Unknown error",
           timestamp: new Date().toISOString(),
         })
       );
@@ -532,7 +548,7 @@ export class WorkerClientService extends EventEmitter {
         JSON.stringify({
           jobId: request.id,
           workerId: config.worker.id,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : "Unknown error",
           timestamp: new Date().toISOString(),
         })
       );
@@ -543,7 +559,7 @@ export class WorkerClientService extends EventEmitter {
   }
 
   private async handleJobCancellation(jobId: string): Promise<void> {
-    logger.info('Job cancellation requested', { jobId });
+    logger.info("Job cancellation requested", { jobId });
     // In a real implementation, you'd cancel the running job
     // For now, just log it
   }
@@ -552,11 +568,15 @@ export class WorkerClientService extends EventEmitter {
   getWorkerStatus(): WorkerStatus {
     return {
       id: config.worker.id,
-      status: this.isProcessingJob ? 'busy' : (this.isConnected ? 'online' : 'offline'),
+      status: this.isProcessingJob
+        ? "busy"
+        : this.isConnected
+          ? "online"
+          : "offline",
       currentJobs: [], // For now, simplified to empty array
-      capabilities: this.capabilities || {} as NodeCapabilities,
+      capabilities: this.capabilities || ({} as NodeCapabilities),
       lastHeartbeat: new Date(),
-      connectionHealth: this.isConnected ? 'healthy' : 'poor',
+      connectionHealth: this.isConnected ? "healthy" : "poor",
     };
   }
 

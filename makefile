@@ -110,3 +110,8 @@ setup: install
 	@if [ ! -f server/.env ]; then cp server/.env.example server/.env && echo "Created server/.env file - please configure it"; fi
 	@mkdir -p logs server/logs
 	@echo "Setup complete! Run 'make run-server' and 'make run-client' to start."
+
+format:
+	@echo "Formatting code with Prettier..."
+	npx prettier --write "**/*.ts" "**/*.js" "**/*.json" "**/*.md"
+	@echo "Code formatted successfully!"
