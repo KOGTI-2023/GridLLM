@@ -113,6 +113,85 @@ make run-server
 make run-client
 ```
 
+## Docker Deployment
+
+GridLLM supports Docker deployment with configurable environment variables through a global `.env` file.
+
+### Docker Configuration
+
+1. **Copy the global environment template**
+
+```bash
+cp .env.example .env
+```
+
+2. **Configure Docker environment variables**
+
+```env
+# Network Configuration
+DOCKER_NETWORK=bridge
+
+# Server Configuration
+SERVER_PORT=4000
+SERVER_CONTAINER_NAME=llmama-server-container
+SERVER_IMAGE_NAME=llmama-server
+
+# Client Configuration
+CLIENT_PORT=3000
+CLIENT_CONTAINER_NAME=llmama-client-container
+CLIENT_IMAGE_NAME=llmama-client
+WORKER_ID=worker-docker-001
+
+# Redis Configuration (adjust for your Redis setup)
+REDIS_HOST=host.docker.internal
+REDIS_PORT=6379
+
+# Ollama Configuration (adjust for your Ollama setup)
+OLLAMA_HOST=host.docker.internal
+OLLAMA_PORT=11434
+OLLAMA_PROTOCOL=http
+```
+
+### Docker Commands
+
+All Docker commands use the environment variables from your `.env` file:
+
+```bash
+# Build Docker images
+make docker-build          # Build both server and client images
+make docker-build-server   # Build server image only
+make docker-build-client   # Build client image only
+
+# Run containers
+make docker-run            # Start both containers
+make docker-run-server     # Start server container only
+make docker-run-client     # Start client container only
+
+# Management
+make docker-stop           # Stop all containers
+make docker-clean          # Remove containers and images
+make docker-logs           # View container logs
+make docker-status         # Check container status
+```
+
+### Docker Network Setup
+
+For production deployments, consider creating a custom Docker network:
+
+```bash
+# Create a custom network
+docker network create gridllm-network
+
+# Update .env file
+DOCKER_NETWORK=gridllm-network
+
+# Deploy Redis in the same network
+docker run -d --name redis --network gridllm-network redis:alpine
+
+# Update Redis host in .env
+REDIS_HOST=redis
+```
+
 ## Configuration
 
 ### Server Configuration (`server/.env`)
