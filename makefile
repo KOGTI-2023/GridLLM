@@ -86,14 +86,27 @@ docker-run-server:
 	@echo "Starting server container..."
 	@docker stop llmama-server-container 2>/dev/null || true
 	@docker rm llmama-server-container 2>/dev/null || true
-	docker run -d -p 4000:4000 --name llmama-server-container llmama-server
+	docker run -d -p 4000:4000 --name llmama-server-container \
+		--network bridge \
+		-e REDIS_HOST=host.docker.internal \
+		-e REDIS_PORT=6379 \
+		llmama-server
 	@echo "✅ Server container started on port 4000"
 
 docker-run-client:
 	@echo "Starting client container..."
 	@docker stop llmama-client-container 2>/dev/null || true
 	@docker rm llmama-client-container 2>/dev/null || true
-	docker run -d -p 3000:3000 --name llmama-client-container llmama-client
+	docker run -d -p 3000:3000 --name llmama-client-container \
+		--network bridge \
+		-e SERVER_REDIS_HOST=host.docker.internal \
+		-e SERVER_REDIS_PORT=6379 \
+		-e SERVER_HOST=host.docker.internal \
+		-e SERVER_PORT=4000 \
+		-e OLLAMA_HOST=host.docker.internal \
+		-e OLLAMA_PORT=11434 \
+		-e OLLAMA_PROTOCOL=http \
+		llmama-client
 	@echo "✅ Client container started on port 3000"
 
 docker-stop:

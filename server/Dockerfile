@@ -26,6 +26,9 @@ RUN npm run build
 # Remove dev dependencies to reduce image size
 RUN npm prune --production
 
+# Copy tsconfig.json to root for runtime path resolution
+COPY tsconfig.json ./tsconfig.json
+
 # Create logs directory
 RUN mkdir -p logs
 
