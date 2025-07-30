@@ -18,6 +18,8 @@ export interface InferenceRequest {
 
 export interface InferenceResponse {
 	id: string;
+	model?: string;
+	created_at?: string;
 	response: string;
 	done: boolean;
 	context?: number[];

@@ -47,6 +47,7 @@ const envSchema = Joi.object({
 
 	// Security (simplified for worker)
 	API_KEY: Joi.string().default("worker-api-key"),
+	JWT_SECRET: Joi.string().default("your-jwt-secret-key"),
 
 	// Monitoring & Logging
 	LOG_LEVEL: Joi.string()
@@ -122,6 +123,7 @@ export const config = {
 
 	security: {
 		apiKey: envVars.API_KEY,
+		jwtSecret: envVars.JWT_SECRET,
 	},
 
 	logging: {

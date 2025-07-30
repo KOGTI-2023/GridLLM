@@ -1,5 +1,5 @@
 {
-	"name": "GridLLM-server",
+	"name": "gridllm-server",
 	"version": "1.0.0",
 	"description": "Central GridLLM server for managing distributed AI inference workers",
 	"main": "dist/index.js",
@@ -10,7 +10,12 @@
 		"test": "jest",
 		"test:watch": "jest --watch",
 		"lint": "eslint src/**/*.ts",
-		"lint:fix": "eslint src/**/*.ts --fix"
+		"lint:fix": "eslint src/**/*.ts --fix",
+		"docker:build": "docker build -t llmama-server .",
+		"docker:run": "docker run -p 4000:4000 --name llmama-server-container llmama-server",
+		"docker:stop": "docker stop llmama-server-container",
+		"docker:clean": "docker rm llmama-server-container",
+		"docker:logs": "docker logs llmama-server-container"
 	},
 	"keywords": [
 		"ai",
