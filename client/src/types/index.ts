@@ -21,6 +21,7 @@ export interface InferenceResponse {
 	model?: string;
 	created_at?: string;
 	response: string;
+	thinking?: string;
 	done: boolean;
 	context?: number[];
 	total_duration?: number;

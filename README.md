@@ -40,6 +40,7 @@ GridLLM consists of three main components:
 -   **Complete API Coverage**: All Ollama endpoints supported (`/ollama/*`)
 -   **Streaming Support**: Real-time token streaming for chat applications
 -   **Model Management**: Distributed model availability across workers
+-   **Thinking Models**: Support for `think` parameter to get reasoning from thinking models
 
 ### **Advanced Job Scheduling**
 
@@ -318,6 +319,32 @@ curl -X POST http://localhost:4000/ollama/api/generate \
   }'
 ```
 
+#### Generate Completion with Thinking (for thinking models)
+
+```bash
+curl -X POST http://localhost:4000/ollama/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3:14b",
+    "prompt": "What is the capital of the US?",
+    "think": true,
+    "stream": false
+  }'
+```
+
+Response with thinking:
+
+```json
+{
+	"model": "qwen3:14b",
+	"created_at": "2025-07-30T00:38:06.249971Z",
+	"response": "The capital of the United States is **Washington, D.C.**",
+	"thinking": "The user is asking for the capital of the United States...",
+	"done": true,
+	"done_reason": "stop"
+}
+```
+
 #### Chat Completion
 
 ```bash
@@ -330,6 +357,36 @@ curl -X POST http://localhost:4000/ollama/api/chat \
     ],
     "stream": false
   }'
+```
+
+#### Chat Completion with Thinking
+
+```bash
+curl -X POST http://localhost:4000/ollama/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen3:14b",
+    "messages": [
+      {"role": "user", "content": "Explain quantum computing"}
+    ],
+    "think": true,
+    "stream": false
+  }'
+```
+
+Response with thinking:
+
+```json
+{
+	"model": "qwen3:14b",
+	"created_at": "2025-07-30T00:38:06.249971Z",
+	"message": {
+		"role": "assistant",
+		"content": "Quantum computing is a revolutionary approach...",
+		"thinking": "The user wants me to explain quantum computing..."
+	},
+	"done": true
+}
 ```
 
 #### List Models

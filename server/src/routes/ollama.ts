@@ -178,7 +178,7 @@ export const ollamaRoutes = (
 
 	// Helper function to convert GridLLM response to Ollama format
 	const convertToOllamaResponse = (response: any, model: string) => {
-		return {
+		const ollamaResponse: any = {
 			model,
 			created_at: response.created_at || new Date().toISOString(),
 			response: response.response || "",
@@ -191,6 +191,13 @@ export const ollamaRoutes = (
 			eval_count: response.eval_count || 0,
 			eval_duration: response.eval_duration || 0,
 		};
+
+		// Include thinking field if present
+		if (response.thinking) {
+			ollamaResponse.thinking = response.thinking;
+		}
+
+		return ollamaResponse;
 	};
 
 	// API/GENERATE - Generate a completion
@@ -290,8 +297,9 @@ export const ollamaRoutes = (
 
 					// TODO: Implement streaming response
 					// For now, we'll simulate streaming by getting the full response and streaming it
-					const result =
-						await jobScheduler.submitAndWait(inferenceRequest);
+					const result = await jobScheduler.submitAndWait(
+						inferenceRequest
+					);
 					const ollamaResponse = convertToOllamaResponse(
 						result,
 						validatedData.model
@@ -303,7 +311,7 @@ export const ollamaRoutes = (
 
 					for (let i = 0; i < responseText.length; i += chunkSize) {
 						const chunk = responseText.slice(i, i + chunkSize);
-						const streamData = {
+						const streamData: any = {
 							...ollamaResponse,
 							response: chunk,
 							done: i + chunkSize >= responseText.length,
@@ -317,6 +325,7 @@ export const ollamaRoutes = (
 							delete streamData.eval_count;
 							delete streamData.eval_duration;
 							delete streamData.context;
+							// Keep thinking in all chunks if present
 						}
 
 						streamResponse(res, streamData);
@@ -327,8 +336,9 @@ export const ollamaRoutes = (
 
 					res.end();
 				} else {
-					const result =
-						await jobScheduler.submitAndWait(inferenceRequest);
+					const result = await jobScheduler.submitAndWait(
+						inferenceRequest
+					);
 					const ollamaResponse = convertToOllamaResponse(
 						result,
 						validatedData.model
@@ -437,14 +447,15 @@ export const ollamaRoutes = (
 					res.setHeader("Content-Type", "application/json");
 					res.setHeader("Transfer-Encoding", "chunked");
 
-					const result =
-						await jobScheduler.submitAndWait(inferenceRequest);
+					const result = await jobScheduler.submitAndWait(
+						inferenceRequest
+					);
 					const responseText = result.response || "";
 					const chunkSize = 10;
 
 					for (let i = 0; i < responseText.length; i += chunkSize) {
 						const chunk = responseText.slice(i, i + chunkSize);
-						const streamData = {
+						const streamData: any = {
 							model: validatedData.model,
 							created_at: new Date().toISOString(),
 							message: {
@@ -454,6 +465,11 @@ export const ollamaRoutes = (
 							},
 							done: i + chunkSize >= responseText.length,
 						};
+
+						// Include thinking field if present
+						if (result.thinking) {
+							streamData.message.thinking = result.thinking;
+						}
 
 						if (streamData.done) {
 							streamData.done = true;
@@ -476,9 +492,10 @@ export const ollamaRoutes = (
 
 					res.end();
 				} else {
-					const result =
-						await jobScheduler.submitAndWait(inferenceRequest);
-					const chatResponse = {
+					const result = await jobScheduler.submitAndWait(
+						inferenceRequest
+					);
+					const chatResponse: any = {
 						model: validatedData.model,
 						created_at: new Date().toISOString(),
 						message: {
@@ -493,6 +510,11 @@ export const ollamaRoutes = (
 						eval_count: result.eval_count || 0,
 						eval_duration: result.eval_duration || 0,
 					};
+
+					// Include thinking field if present
+					if (result.thinking) {
+						chatResponse.message.thinking = result.thinking;
+					}
 
 					res.json(chatResponse);
 				}

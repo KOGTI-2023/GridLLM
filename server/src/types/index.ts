@@ -85,6 +85,7 @@ export interface InferenceResponse {
 	model?: string;
 	created_at?: string;
 	response: string;
+	thinking?: string;
 	done: boolean;
 	done_reason?: string;
 	context?: number[];
@@ -178,6 +179,7 @@ export interface OllamaChatResponse {
 	message: {
 		role: string;
 		content: string;
+		thinking?: string;
 		images?: null;
 		tool_calls?: any[];
 	};
@@ -211,6 +213,7 @@ export interface OllamaGenerateResponse {
 	model: string;
 	created_at: string;
 	response: string;
+	thinking?: string;
 	done: boolean;
 	done_reason?: string;
 	context?: number[];
