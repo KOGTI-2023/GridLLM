@@ -1,5 +1,5 @@
 # GridLLM Development Scripts
-.PHONY: help install install-server install-client run run-server run-client stop run-server-native run-client-native build-server build-client clean logs-server logs-client logs-server-docker logs-client-docker logs-server-native logs-client-native test docker-build docker-build-server docker-build-client docker-run docker-run-server docker-run-client docker-stop docker-clean docker-logs docker-status
+.PHONY: help install install-server install-client run run-server run-client stop run-server-native run-client-native build-server build-client clean logs-server logs-client logs-server-docker logs-client-docker logs-server-native logs-client-native test docker-build docker-build-server docker-build-client docker-run docker-run-server docker-run-client docker-stop docker-clean docker-logs docker-status bundle bundle-with-client bundle-stop bundle-logs compose-up compose-down compose-build compose-logs compose-status compose-clean
 
 # Load environment variables from .env file if it exists
 ifneq (,$(wildcard ./.env))
@@ -85,6 +85,12 @@ help:
 	@echo "    docker-clean        - Remove all containers and images"
 	@echo "    docker-logs         - View logs from all containers"
 	@echo "    docker-status       - Check status of all containers"
+	@echo ""
+	@echo "  Bundle Commands (Docker Compose with Redis):"
+	@echo "    bundle              - Start server + Redis with Docker Compose"
+	@echo "    bundle-with-client  - Start server + Redis + client with Docker Compose"
+	@echo "    bundle-stop         - Stop all bundle services"
+	@echo "    bundle-logs         - View bundle services logs"
 	@echo ""
 	@echo "  Utility Commands:"
 	@echo "    status          - Check overall system status"
@@ -411,3 +417,66 @@ format:
 	@echo "Formatting code with Prettier..."
 	npx prettier --write "**/*.ts" "**/*.js" "**/*.json" "**/*.md"
 	@echo "Code formatted successfully!"
+
+# Bundle Commands (Docker Compose with Redis)
+bundle:
+	@echo "Starting GridLLM bundle (Server + Redis)..."
+	@echo "🔨 Building and starting server and Redis with Docker Compose"
+	docker compose up -d redis server
+	@echo "✅ Bundle started successfully!"
+	@echo "📊 Server: http://localhost:$(SERVER_PORT)/health"
+	@echo "🔍 Redis: localhost:$(REDIS_PORT)"
+	@echo "📋 Use 'make bundle-logs' to view logs"
+
+bundle-with-client:
+	@echo "Starting GridLLM full bundle (Server + Redis + Client)..."
+	@echo "🔨 Building and starting all services with Docker Compose"
+	docker compose up -d
+	@echo "✅ Full bundle started successfully!"
+	@echo "📊 Server: http://localhost:$(SERVER_PORT)/health"
+	@echo "🔧 Client: http://localhost:$(CLIENT_PORT)/health"
+	@echo "🔍 Redis: localhost:$(REDIS_PORT)"
+	@echo "📋 Use 'make bundle-logs' to view logs"
+
+bundle-stop:
+	@echo "Stopping bundle services..."
+	docker compose down
+	@echo "✅ Bundle services stopped"
+
+bundle-logs:
+	@echo "Viewing bundle services logs (Ctrl+C to exit)..."
+	docker compose logs -f
+
+# Docker Compose Commands
+compose-up:
+	@echo "Starting all services with Docker Compose..."
+	docker compose up -d
+	@echo "✅ All services started"
+
+compose-down:
+	@echo "Stopping all Docker Compose services..."
+	docker compose down
+	@echo "✅ All services stopped"
+
+compose-build:
+	@echo "Building Docker Compose services..."
+	docker compose build
+	@echo "✅ Services built successfully"
+
+compose-logs:
+	@echo "Viewing Docker Compose logs (Ctrl+C to exit)..."
+	docker compose logs -f
+
+compose-status:
+	@echo "=== Docker Compose Status ==="
+	docker compose ps
+	@echo ""
+	@echo "=== Service Health Checks ==="
+	@curl -s http://localhost:$(SERVER_PORT)/health 2>/dev/null | jq '.' || echo "Server not responding"
+	@curl -s http://localhost:$(CLIENT_PORT)/health 2>/dev/null | jq '.' || echo "Client not responding"
+
+compose-clean:
+	@echo "Cleaning up Docker Compose services and volumes..."
+	docker compose down -v --remove-orphans
+	docker compose rm -f
+	@echo "✅ Cleanup complete"
