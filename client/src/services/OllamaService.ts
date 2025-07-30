@@ -100,17 +100,49 @@ export class OllamaService {
 		request: InferenceRequest
 	): Promise<InferenceResponse> {
 		try {
-			const payload = {
+			const payload: any = {
 				model: request.model,
 				prompt: request.prompt,
 				stream: false,
 				options: request.options || {},
 			};
 
+			// Add think parameter if present in metadata
+			if (request.metadata?.think) {
+				payload.think = request.metadata.think;
+			}
+
+			// Add other metadata fields that should be passed to Ollama
+			if (request.metadata?.suffix) {
+				payload.suffix = request.metadata.suffix;
+			}
+			if (request.metadata?.images) {
+				payload.images = request.metadata.images;
+			}
+			if (request.metadata?.format) {
+				payload.format = request.metadata.format;
+			}
+			if (request.metadata?.system) {
+				payload.system = request.metadata.system;
+			}
+			if (request.metadata?.template) {
+				payload.template = request.metadata.template;
+			}
+			if (request.metadata?.raw) {
+				payload.raw = request.metadata.raw;
+			}
+			if (request.metadata?.keep_alive) {
+				payload.keep_alive = request.metadata.keep_alive;
+			}
+			if (request.metadata?.context) {
+				payload.context = request.metadata.context;
+			}
+
 			logger.info("Starting inference", {
 				id: request.id,
 				model: request.model,
 				promptLength: request.prompt.length,
+				think: payload.think,
 			});
 
 			const response: AxiosResponse<InferenceResponse> =
@@ -125,6 +157,7 @@ export class OllamaService {
 				id: request.id,
 				responseLength: result.response.length,
 				duration: result.total_duration,
+				hasThinking: !!result.thinking,
 			});
 
 			return result;
@@ -135,7 +168,9 @@ export class OllamaService {
 				error: error,
 			});
 			throw new Error(
-				`Inference failed: ${error instanceof Error ? error.message : "Unknown error"}`
+				`Inference failed: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
 			);
 		}
 	}
@@ -144,17 +179,49 @@ export class OllamaService {
 		request: InferenceRequest
 	): AsyncGenerator<StreamResponse> {
 		try {
-			const payload = {
+			const payload: any = {
 				model: request.model,
 				prompt: request.prompt,
 				stream: true,
 				options: request.options || {},
 			};
 
+			// Add think parameter if present in metadata
+			if (request.metadata?.think) {
+				payload.think = request.metadata.think;
+			}
+
+			// Add other metadata fields that should be passed to Ollama
+			if (request.metadata?.suffix) {
+				payload.suffix = request.metadata.suffix;
+			}
+			if (request.metadata?.images) {
+				payload.images = request.metadata.images;
+			}
+			if (request.metadata?.format) {
+				payload.format = request.metadata.format;
+			}
+			if (request.metadata?.system) {
+				payload.system = request.metadata.system;
+			}
+			if (request.metadata?.template) {
+				payload.template = request.metadata.template;
+			}
+			if (request.metadata?.raw) {
+				payload.raw = request.metadata.raw;
+			}
+			if (request.metadata?.keep_alive) {
+				payload.keep_alive = request.metadata.keep_alive;
+			}
+			if (request.metadata?.context) {
+				payload.context = request.metadata.context;
+			}
+
 			logger.info("Starting streaming inference", {
 				id: request.id,
 				model: request.model,
 				promptLength: request.prompt.length,
+				think: payload.think,
 			});
 
 			const response = await this.client.post("/api/generate", payload, {
@@ -181,6 +248,7 @@ export class OllamaService {
 							if (data.done) {
 								logger.info("Streaming inference completed", {
 									id: request.id,
+									hasThinking: !!data.thinking,
 								});
 								return;
 							}
@@ -200,7 +268,9 @@ export class OllamaService {
 				error: error,
 			});
 			throw new Error(
-				`Streaming inference failed: ${error instanceof Error ? error.message : "Unknown error"}`
+				`Streaming inference failed: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
 			);
 		}
 	}
@@ -223,7 +293,9 @@ export class OllamaService {
 				error: error,
 			});
 			throw new Error(
-				`Failed to pull model ${modelName}: ${error instanceof Error ? error.message : "Unknown error"}`
+				`Failed to pull model ${modelName}: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
 			);
 		}
 	}
@@ -243,7 +315,9 @@ export class OllamaService {
 				error: error,
 			});
 			throw new Error(
-				`Failed to delete model ${modelName}: ${error instanceof Error ? error.message : "Unknown error"}`
+				`Failed to delete model ${modelName}: ${
+					error instanceof Error ? error.message : "Unknown error"
+				}`
 			);
 		}
 	}
