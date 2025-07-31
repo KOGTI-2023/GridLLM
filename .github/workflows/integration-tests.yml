@@ -29,6 +29,11 @@ jobs:
                   timeout 120 bash -c 'until curl -f http://localhost:11434/api/version; do sleep 5; done'
                   echo "Ollama is ready"
 
+                  # Pull qwen2.5:0.5b on Ollama POST /api/pull
+                  echo "Pulling qwen2.5:0.5b model..."
+                  timeout 120 bash -c 'until curl -X POST -H "Content-Type: application/json" -d "{\"model\": \"qwen2.5:0.5b\"}" http://localhost:11434/api/pull; do sleep 5; done'
+                  echo "Model qwen2.5:0.5b is ready"
+
             - name: Create .env file for testing
               run: |
                   cat > .env << EOF
@@ -82,7 +87,7 @@ jobs:
                   timeout 30 bash -c 'until curl -f http://localhost:3000/health; do sleep 5; done'
                   echo "Client is healthy"
 
-            - name: Run basic integration tests
+            - name: Check if services are healthy
               run: |
                   echo "Testing server health endpoint..."
                   curl -f http://localhost:4000/health
@@ -97,6 +102,11 @@ jobs:
                   curl -f http://localhost:11434/api/version
 
                   echo "All services are running and healthy!"
+
+            - name: Test /ollama Endpoints
+              run: |
+                  echo "Testing POST /ollama/api/generate"
+                  curl -f -X POST -H "Content-Type: application/json" -d '{"prompt": "What country is New York in? Answer in just the country.", "model": "qwen2.5:0.5b"}' http://localhost:4000/api/generate
 
             - name: Show service logs on failure
               if: failure()
