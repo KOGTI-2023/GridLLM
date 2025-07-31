@@ -746,6 +746,151 @@ export class JobScheduler extends EventEmitter {
 		});
 	}
 
+	async submitStreamingJob(
+		request: InferenceRequest,
+		onChunk: (chunk: any) => void,
+		onComplete: (result: InferenceResponse) => void,
+		onError: (error: Error) => void
+	): Promise<void> {
+		try {
+			// Subscribe to streaming updates for this specific request
+			const streamChannel = `job:stream:${request.id}`;
+			const resultChannel = `job:result:${request.id}`;
+
+			logger.debug("Setting up streaming subscriptions", {
+				streamChannel,
+				resultChannel,
+				requestId: request.id,
+			});
+
+			const timeout = setTimeout(() => {
+				logger.warn(
+					"Streaming job timed out, cleaning up subscriptions",
+					{
+						requestId: request.id,
+						timeout: request.timeout || config.jobs.timeout,
+					}
+				);
+				try {
+					this.redis.unsubscribe(streamChannel);
+				} catch (error) {
+					logger.error("Failed to unsubscribe from streamChannel", {
+						streamChannel,
+						requestId: request.id,
+						error,
+					});
+				}
+				try {
+					this.redis.unsubscribe(resultChannel);
+				} catch (error) {
+					logger.error("Failed to unsubscribe from resultChannel", {
+						resultChannel,
+						requestId: request.id,
+						error,
+					});
+				}
+				onError(
+					new Error(
+						`Streaming job ${request.id} timed out after ${request.timeout || config.jobs.timeout}ms`
+					)
+				);
+			}, request.timeout || config.jobs.timeout);
+
+			const handleStreamChunk = (message: string) => {
+				try {
+					logger.debug("JobScheduler received stream chunk", {
+						message: message.substring(0, 200),
+						messageLength: message.length,
+						requestId: request.id,
+					});
+
+					const data = JSON.parse(message);
+					logger.debug("Parsed stream chunk data", {
+						jobId: data.jobId,
+						requestId: request.id,
+						hasChunk: !!data.chunk,
+					});
+
+					if (data.jobId === request.id) {
+						logger.debug("Processing stream chunk for job", {
+							jobId: data.jobId,
+							chunkResponse:
+								data.chunk?.response || "No response",
+							chunkDone: data.chunk?.done,
+						});
+						onChunk(data.chunk);
+					} else {
+						logger.debug("Ignoring chunk for different job", {
+							receivedJobId: data.jobId,
+							expectedJobId: request.id,
+						});
+					}
+				} catch (error) {
+					logger.error("Failed to parse streaming chunk", error);
+				}
+			};
+
+			const handleResult = (message: string) => {
+				try {
+					const data = JSON.parse(message);
+					if (data.jobId === request.id) {
+						clearTimeout(timeout);
+						try {
+							this.redis.unsubscribe(streamChannel);
+						} catch (error) {
+							logger.error("Failed to unsubscribe from streamChannel in handleResult", {
+								streamChannel,
+								error,
+							});
+						}
+						try {
+							this.redis.unsubscribe(resultChannel);
+						} catch (error) {
+							logger.error("Failed to unsubscribe from resultChannel in handleResult", {
+								resultChannel,
+								error,
+							});
+						}
+
+						if (data.error) {
+							onError(new Error(data.error));
+						} else {
+							onComplete(data.result);
+						}
+					}
+				} catch (error) {
+					logger.error("Failed to parse streaming result", error);
+				}
+			};
+
+			// Subscribe to both streaming chunks and final result
+			logger.debug("Subscribing to Redis channels", {
+				streamChannel,
+				resultChannel,
+				requestId: request.id,
+			});
+
+			await this.redis.subscribe(streamChannel, handleStreamChunk);
+			logger.debug("Subscribed to stream channel", { streamChannel });
+
+			await this.redis.subscribe(resultChannel, handleResult);
+			logger.debug("Subscribed to result channel", { resultChannel });
+
+			// Submit the job
+			await this.addJob(request);
+
+			logger.job(request.id, "Streaming job submitted", {
+				timeout: request.timeout,
+				streamChannel,
+				resultChannel,
+			});
+		} catch (error) {
+			onError(
+				error instanceof Error ? error : new Error("Unknown error")
+			);
+		}
+	}
+
 	getQueuedJobCount(): number {
 		return this.jobQueue.length;
 	}
