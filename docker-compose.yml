@@ -48,7 +48,7 @@ services:
             - NODE_ENV=${NODE_ENV:-development}
             - PORT=${SERVER_PORT:-4000}
             - REDIS_HOST=redis
-            - REDIS_PORT=${REDIS_PORT:-6379}
+            - REDIS_PORT=6379
             - REDIS_PASSWORD=${REDIS_PASSWORD:-}
             - REDIS_DB=${REDIS_DB:-0}
             - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-GridLLM:}
@@ -87,7 +87,7 @@ services:
         container_name: ${CLIENT_CONTAINER_NAME:-gridllm-client-container}
         restart: unless-stopped
         ports:
-            - "${CLIENT_PORT:-3000}:${CLIENT_PORT:-3000}"
+            - "${CLIENT_PORT:-3000}:3000"
         networks:
             - gridllm-network
         depends_on:
@@ -97,12 +97,12 @@ services:
                 condition: service_healthy
         environment:
             - NODE_ENV=${NODE_ENV:-development}
-            - PORT=${CLIENT_PORT:-3000}
+            - PORT=3000
             - WORKER_ID=${WORKER_ID:-worker-docker-001}
             - SERVER_HOST=server
             - SERVER_PORT=${SERVER_PORT:-4000}
             - SERVER_REDIS_HOST=redis
-            - SERVER_REDIS_PORT=${REDIS_PORT:-6379}
+            - SERVER_REDIS_PORT=6379
             - SERVER_REDIS_PASSWORD=${REDIS_PASSWORD:-}
             - REDIS_DB=${REDIS_DB:-0}
             - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-GridLLM:}
