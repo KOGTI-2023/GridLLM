@@ -8,9 +8,13 @@
 
 GridLLM is a **production-ready distributed AI inference system** that enables horizontal scaling of large language model (LLM) processing across multiple workers. It provides a centralized server that coordinates AI inference requests across a network of worker nodes, offering **complete Ollama API compatibility** and **intelligent load balancing** with enterprise-grade features.
 
-For support, please join our official [discord server](https://discord.com/channels/1400687383342743552/1400687384089198724)
+> [!TIP]
+> For support, please join our official [discord server](https://discord.com/channels/1400687383342743552/1400687384089198724)
 
 ## Quick Start
+
+> [!TIP]
+> For additional information and troubleshooting, please see the [Deployment](https://github.com/GridLLM/GridLLM/blob/staging/docs/deployment/DEPLOYMENT.md) page!
 
 ### Using Docker Compose (Recommended)
 
