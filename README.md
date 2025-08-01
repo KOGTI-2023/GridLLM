@@ -16,7 +16,7 @@ For support, please join our official [discord server](https://discord.com/chann
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/GridLLM/GridLLM.git
 cd GridLLM
 
 # Start the complete system (Server + Redis + Client)
