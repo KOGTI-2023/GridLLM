@@ -3,9 +3,9 @@ import { v4 as uuidv4 } from "uuid";
 import Joi from "joi";
 import { JobScheduler } from "@/services/JobScheduler";
 import { WorkerRegistry } from "@/services/WorkerRegistry";
+import { InferenceRequest, OllamaModel } from "@/types";
 import { logger } from "@/utils/logger";
 import { asyncHandler, createError } from "@/middleware/errorHandler";
-import { InferenceRequest, OllamaModel } from "@/types";
 
 export const ollamaRoutes = (
 	jobScheduler: JobScheduler,
@@ -95,48 +95,6 @@ export const ollamaRoutes = (
 			.optional(),
 	});
 
-	const createModelSchema = Joi.object({
-		model: Joi.string().required(),
-		from: Joi.string().optional(),
-		files: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
-		adapters: Joi.object().pattern(Joi.string(), Joi.string()).optional(),
-		template: Joi.string().optional(),
-		license: Joi.alternatives()
-			.try(Joi.string(), Joi.array().items(Joi.string()))
-			.optional(),
-		system: Joi.string().optional(),
-		parameters: Joi.object().optional(),
-		messages: Joi.array().items(Joi.object()).optional(),
-		stream: Joi.boolean().default(true),
-		quantize: Joi.string().valid("q4_K_M", "q4_K_S", "q8_0").optional(),
-	});
-
-	const copyModelSchema = Joi.object({
-		source: Joi.string().required(),
-		destination: Joi.string().required(),
-	});
-
-	const deleteModelSchema = Joi.object({
-		model: Joi.string().required(),
-	});
-
-	const pullModelSchema = Joi.object({
-		model: Joi.string().required(),
-		insecure: Joi.boolean().default(false),
-		stream: Joi.boolean().default(true),
-	});
-
-	const pushModelSchema = Joi.object({
-		model: Joi.string().required(),
-		insecure: Joi.boolean().default(false),
-		stream: Joi.boolean().default(true),
-	});
-
-	const showModelSchema = Joi.object({
-		model: Joi.string().required(),
-		verbose: Joi.boolean().default(false),
-	});
-
 	const embedRequestSchema = Joi.object({
 		model: Joi.string().required(),
 		input: Joi.alternatives()
@@ -167,8 +125,7 @@ export const ollamaRoutes = (
 				404
 			);
 		}
-		// Note: We don't check for immediately available workers here
-		// The job scheduler will queue the request and assign it when workers become available
+		// Note: The job scheduler will queue the request and assign it when workers become available
 	};
 
 	// Helper function to stream response
@@ -285,7 +242,7 @@ export const ollamaRoutes = (
 				"Ollama generate request submitted",
 				{
 					model: inferenceRequest.model,
-					promptLength: inferenceRequest.prompt.length,
+					promptLength: inferenceRequest.prompt?.length || 0,
 					stream: validatedData.stream,
 				}
 			);
@@ -295,50 +252,61 @@ export const ollamaRoutes = (
 					res.setHeader("Content-Type", "application/json");
 					res.setHeader("Transfer-Encoding", "chunked");
 
-					// TODO: Implement streaming response
-					// For now, we'll simulate streaming by getting the full response and streaming it
-					const result = await jobScheduler.submitAndWait(
-						inferenceRequest
-					);
-					const ollamaResponse = convertToOllamaResponse(
-						result,
-						validatedData.model
-					);
+					// Use real streaming from JobScheduler
+					await jobScheduler.submitStreamingJob(
+						inferenceRequest,
+						// onChunk callback - called for each streaming chunk
+						(chunk) => {
+							logger.info("Received streaming chunk", {
+								jobId: inferenceRequest.id,
+								chunk: chunk,
+								chunkKeys: Object.keys(chunk),
+							});
 
-					// Stream the response in chunks
-					const responseText = ollamaResponse.response;
-					const chunkSize = 10; // Characters per chunk
+							const ollamaChunk = convertToOllamaResponse(
+								chunk,
+								validatedData.model
+							);
+							logger.info("Converted to Ollama format", {
+								jobId: inferenceRequest.id,
+								ollamaChunk: ollamaChunk,
+							});
 
-					for (let i = 0; i < responseText.length; i += chunkSize) {
-						const chunk = responseText.slice(i, i + chunkSize);
-						const streamData: any = {
-							...ollamaResponse,
-							response: chunk,
-							done: i + chunkSize >= responseText.length,
-						};
-
-						if (!streamData.done) {
-							delete streamData.total_duration;
-							delete streamData.load_duration;
-							delete streamData.prompt_eval_count;
-							delete streamData.prompt_eval_duration;
-							delete streamData.eval_count;
-							delete streamData.eval_duration;
-							delete streamData.context;
-							// Keep thinking in all chunks if present
+							streamResponse(res, ollamaChunk);
+						},
+						// onComplete callback - called when streaming is done
+						(result) => {
+							const finalResponse = convertToOllamaResponse(
+								result,
+								validatedData.model
+							);
+							streamResponse(res, finalResponse);
+							res.end();
+						},
+						// onError callback - called if there's an error
+						(error) => {
+							logger.job(
+								inferenceRequest.id,
+								"Ollama generate streaming request failed",
+								{
+									error: error.message,
+								}
+							);
+							// Send error as Ollama-compatible response
+							const errorResponse = {
+								model: validatedData.model,
+								created_at: new Date().toISOString(),
+								response: "",
+								done: true,
+								error: error.message,
+							};
+							streamResponse(res, errorResponse);
+							res.end();
 						}
-
-						streamResponse(res, streamData);
-
-						// Small delay to simulate streaming
-						await new Promise((resolve) => setTimeout(resolve, 50));
-					}
-
-					res.end();
-				} else {
-					const result = await jobScheduler.submitAndWait(
-						inferenceRequest
 					);
+				} else {
+					const result =
+						await jobScheduler.submitAndWait(inferenceRequest);
 					const ollamaResponse = convertToOllamaResponse(
 						result,
 						validatedData.model
@@ -447,34 +415,39 @@ export const ollamaRoutes = (
 					res.setHeader("Content-Type", "application/json");
 					res.setHeader("Transfer-Encoding", "chunked");
 
-					const result = await jobScheduler.submitAndWait(
-						inferenceRequest
-					);
-					const responseText = result.response || "";
-					const chunkSize = 10;
+					await jobScheduler.submitStreamingJob(
+						inferenceRequest,
+						// onChunk callback
+						(chunk) => {
+							const chatChunk: any = {
+								model: validatedData.model,
+								created_at: new Date().toISOString(),
+								message: {
+									role: "assistant",
+									content: chunk.response || "",
+									images: null,
+								},
+								done: chunk.done || false,
+							};
 
-					for (let i = 0; i < responseText.length; i += chunkSize) {
-						const chunk = responseText.slice(i, i + chunkSize);
-						const streamData: any = {
-							model: validatedData.model,
-							created_at: new Date().toISOString(),
-							message: {
-								role: "assistant",
-								content: chunk,
-								images: null,
-							},
-							done: i + chunkSize >= responseText.length,
-						};
+							// Include thinking field if present
+							if (chunk.thinking) {
+								(chatChunk.message as any).thinking =
+									chunk.thinking;
+							}
 
-						// Include thinking field if present
-						if (result.thinking) {
-							streamData.message.thinking = result.thinking;
-						}
-
-						if (streamData.done) {
-							streamData.done = true;
-							// Add final metadata
-							Object.assign(streamData, {
+							streamResponse(res, chatChunk);
+						},
+						// onComplete callback
+						(result) => {
+							const finalChatResponse: any = {
+								model: validatedData.model,
+								created_at: new Date().toISOString(),
+								message: {
+									role: "assistant",
+									content: result.response || "",
+								},
+								done: true,
 								total_duration: result.total_duration || 0,
 								load_duration: result.load_duration || 0,
 								prompt_eval_count:
@@ -483,18 +456,40 @@ export const ollamaRoutes = (
 									result.prompt_eval_duration || 0,
 								eval_count: result.eval_count || 0,
 								eval_duration: result.eval_duration || 0,
-							});
+							};
+
+							// Include thinking field if present
+							if (result.thinking) {
+								(finalChatResponse.message as any).thinking =
+									result.thinking;
+							}
+
+							streamResponse(res, finalChatResponse);
+							res.end();
+						},
+						// onError callback
+						(error) => {
+							logger.job(
+								inferenceRequest.id,
+								"Ollama chat streaming request failed",
+								{
+									error: error.message,
+								}
+							);
+							const errorResponse = {
+								model: validatedData.model,
+								created_at: new Date().toISOString(),
+								message: { role: "assistant", content: "" },
+								done: true,
+								error: error.message,
+							};
+							streamResponse(res, errorResponse);
+							res.end();
 						}
-
-						streamResponse(res, streamData);
-						await new Promise((resolve) => setTimeout(resolve, 50));
-					}
-
-					res.end();
-				} else {
-					const result = await jobScheduler.submitAndWait(
-						inferenceRequest
 					);
+				} else {
+					const result =
+						await jobScheduler.submitAndWait(inferenceRequest);
 					const chatResponse: any = {
 						model: validatedData.model,
 						created_at: new Date().toISOString(),
@@ -530,290 +525,79 @@ export const ollamaRoutes = (
 		})
 	);
 
-	// API/CREATE - Create a model
-	router.post(
-		"/api/create",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { error, value: validatedData } = createModelSchema.validate(
-				req.body
-			);
-			if (error) {
-				throw createError(
-					`Validation error: ${error.details[0]?.message}`,
-					400
-				);
-			}
-
-			// This is a placeholder implementation
-			// In a real implementation, you would handle model creation/copying/quantization
-			logger.info("Model creation requested", validatedData);
-
-			if (validatedData.stream) {
-				res.setHeader("Content-Type", "application/json");
-
-				const steps = [
-					"reading model metadata",
-					"creating system layer",
-					"writing manifest",
-					"success",
-				];
-
-				for (const step of steps) {
-					streamResponse(res, { status: step });
-					await new Promise((resolve) => setTimeout(resolve, 1000));
-				}
-
-				res.end();
-			} else {
-				res.json({ status: "success" });
-			}
-		})
-	);
-
 	// API/TAGS - List local models
 	router.get(
 		"/api/tags",
 		asyncHandler(async (req: Request, res: Response) => {
-			const allWorkers = workerRegistry.getAllWorkers();
-			const modelsMap = new Map<string, OllamaModel>();
+			try {
+				const allWorkers = workerRegistry.getAllWorkers();
+				const modelsMap = new Map<string, any>();
+				const modelWorkerCount = new Map<string, number>();
 
-			// Aggregate models from all workers
-			for (const worker of allWorkers) {
-				for (const model of worker.capabilities.availableModels) {
-					if (!modelsMap.has(model.name)) {
-						modelsMap.set(model.name, {
-							name: model.name,
-							model: model.name,
-							modified_at: model.modified_at,
-							size: model.size,
-							digest: model.digest,
-							details: model.details,
-						} as any);
+				// Aggregate models from all workers
+				for (const worker of allWorkers) {
+					if (
+						worker.capabilities &&
+						worker.capabilities.availableModels
+					) {
+						for (const model of worker.capabilities
+							.availableModels) {
+							// Count workers that have this model
+							const currentCount =
+								modelWorkerCount.get(model.name) || 0;
+							modelWorkerCount.set(model.name, currentCount + 1);
+
+							if (!modelsMap.has(model.name)) {
+								modelsMap.set(model.name, {
+									name: model.name,
+									model: model.name,
+									modified_at:
+										model.modified_at ||
+										new Date().toISOString(),
+									size: model.size || 0,
+									digest: model.digest || "",
+									details: model.details || {
+										parent_model: "",
+										format: "gguf",
+										family: "unknown",
+										families: ["unknown"],
+										parameter_size: "Unknown",
+										quantization_level: "Unknown",
+									},
+									gridllm_metadata: {
+										num_workers_with_model: 0, // Will be updated below
+									},
+								});
+							}
+						}
 					}
 				}
-			}
 
-			const models = Array.from(modelsMap.values()).sort((a, b) =>
-				a.name.localeCompare(b.name)
-			);
-
-			res.json({ models });
-		})
-	);
-
-	// API/SHOW - Show model information
-	router.post(
-		"/api/show",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { error, value: validatedData } = showModelSchema.validate(
-				req.body
-			);
-			if (error) {
-				throw createError(
-					`Validation error: ${error.details[0]?.message}`,
-					400
-				);
-			}
-
-			validateModelExists(validatedData.model);
-
-			// Find model details from workers
-			const allWorkers = workerRegistry.getAllWorkers();
-			let modelInfo = null;
-
-			for (const worker of allWorkers) {
-				const model = worker.capabilities.availableModels.find(
-					(m) => m.name === validatedData.model
-				);
-				if (model) {
-					modelInfo = model;
-					break;
-				}
-			}
-
-			if (!modelInfo) {
-				throw createError(
-					`Model '${validatedData.model}' not found`,
-					404
-				);
-			}
-
-			const response: any = {
-				modelfile: `# Modelfile generated by GridLLM\n# Model: ${validatedData.model}\nFROM ${validatedData.model}`,
-				parameters: 'stop "\\n"\nstop "user:"\nstop "assistant:"',
-				template:
-					"{{ if .System }}{{ .System }}\\n{{ end }}{{ if .Prompt }}{{ .Prompt }}{{ end }}",
-				details: modelInfo.details || {
-					parent_model: "",
-					format: "gguf",
-					family: "llama",
-					families: ["llama"],
-					parameter_size: "Unknown",
-					quantization_level: "Unknown",
-				},
-				model_info: {
-					"general.architecture": "llama",
-					"general.parameter_count": 0,
-					"llama.context_length": 4096,
-					"llama.embedding_length": 4096,
-				} as Record<string, any>,
-				capabilities: ["completion"],
-			};
-
-			if (validatedData.verbose) {
-				// Add verbose information
-				response.model_info["tokenizer.ggml.tokens"] = [];
-				response.model_info["tokenizer.ggml.merges"] = [];
-				response.model_info["tokenizer.ggml.token_type"] = [];
-			}
-
-			res.json(response);
-		})
-	);
-
-	// API/COPY - Copy a model
-	router.post(
-		"/api/copy",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { error, value: validatedData } = copyModelSchema.validate(
-				req.body
-			);
-			if (error) {
-				throw createError(
-					`Validation error: ${error.details[0]?.message}`,
-					400
-				);
-			}
-
-			validateModelExists(validatedData.source);
-
-			// This is a placeholder implementation
-			logger.info("Model copy requested", validatedData);
-
-			res.status(200).json({ status: "success" });
-		})
-	);
-
-	// API/DELETE - Delete a model
-	router.delete(
-		"/api/delete",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { error, value: validatedData } = deleteModelSchema.validate(
-				req.body
-			);
-			if (error) {
-				throw createError(
-					`Validation error: ${error.details[0]?.message}`,
-					400
-				);
-			}
-
-			validateModelExists(validatedData.model);
-
-			// This is a placeholder implementation
-			logger.info("Model deletion requested", validatedData);
-
-			res.status(200).json({ status: "success" });
-		})
-	);
-
-	// API/PULL - Pull a model
-	router.post(
-		"/api/pull",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { error, value: validatedData } = pullModelSchema.validate(
-				req.body
-			);
-			if (error) {
-				throw createError(
-					`Validation error: ${error.details[0]?.message}`,
-					400
-				);
-			}
-
-			logger.info("Model pull requested", validatedData);
-
-			if (validatedData.stream) {
-				res.setHeader("Content-Type", "application/json");
-
-				const steps = [
-					{ status: "pulling manifest" },
-					{
-						status: "downloading",
-						digest: "sha256:example",
-						total: 1000000,
-						completed: 250000,
-					},
-					{
-						status: "downloading",
-						digest: "sha256:example",
-						total: 1000000,
-						completed: 500000,
-					},
-					{
-						status: "downloading",
-						digest: "sha256:example",
-						total: 1000000,
-						completed: 1000000,
-					},
-					{ status: "verifying sha256 digest" },
-					{ status: "writing manifest" },
-					{ status: "removing any unused layers" },
-					{ status: "success" },
-				];
-
-				for (const step of steps) {
-					streamResponse(res, step);
-					await new Promise((resolve) => setTimeout(resolve, 500));
+				// Update worker counts for each model
+				for (const [modelName, modelData] of modelsMap.entries()) {
+					modelData.gridllm_metadata.num_workers_with_model =
+						modelWorkerCount.get(modelName) || 0;
 				}
 
-				res.end();
-			} else {
-				res.json({ status: "success" });
-			}
-		})
-	);
-
-	// API/PUSH - Push a model
-	router.post(
-		"/api/push",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { error, value: validatedData } = pushModelSchema.validate(
-				req.body
-			);
-			if (error) {
-				throw createError(
-					`Validation error: ${error.details[0]?.message}`,
-					400
+				const models = Array.from(modelsMap.values()).sort((a, b) =>
+					a.name.localeCompare(b.name)
 				);
-			}
 
-			validateModelExists(validatedData.model);
+				logger.info("API/tags request completed", {
+					modelsCount: models.length,
+					workersCount: allWorkers.length,
+				});
 
-			logger.info("Model push requested", validatedData);
-
-			if (validatedData.stream) {
-				res.setHeader("Content-Type", "application/json");
-
-				const steps = [
-					{ status: "retrieving manifest" },
-					{
-						status: "starting upload",
-						digest: "sha256:example",
-						total: 1000000,
-					},
-					{ status: "pushing manifest" },
-					{ status: "success" },
-				];
-
-				for (const step of steps) {
-					streamResponse(res, step);
-					await new Promise((resolve) => setTimeout(resolve, 500));
-				}
-
-				res.end();
-			} else {
-				res.json({ status: "success" });
+				res.json({ models });
+			} catch (error) {
+				logger.error("Error in /api/tags endpoint", error);
+				res.status(500).json({
+					error: "Internal server error",
+					message:
+						error instanceof Error
+							? error.message
+							: "Unknown error",
+				});
 			}
 		})
 	);
@@ -839,57 +623,59 @@ export const ollamaRoutes = (
 				? validatedData.input
 				: [validatedData.input];
 
-			// Generate placeholder embeddings (in real implementation, send to worker)
-			const embeddings = inputs.map(
-				() => Array.from({ length: 384 }, () => Math.random() * 2 - 1) // Random embeddings
-			);
-
-			res.json({
+			const embeddingRequest: InferenceRequest = {
+				id: uuidv4(),
 				model: validatedData.model,
-				embeddings,
-				total_duration: 1000000,
-				load_duration: 100000,
-				prompt_eval_count: inputs.reduce(
-					(sum: number, input: string) =>
-						sum + input.split(" ").length,
-					0
-				),
+				input: inputs,
+				options: validatedData.options || {},
+				priority: "medium",
+				timeout: 300000,
+				metadata: {
+					requestType: "embedding",
+					ollamaEndpoint: "/api/embed",
+					truncate: validatedData.truncate,
+					keep_alive: validatedData.keep_alive,
+					submittedAt: new Date().toISOString(),
+					clientIp: req.ip,
+					userAgent: req.get("User-Agent"),
+				},
+			};
+
+			logger.job(embeddingRequest.id, "Ollama embed request submitted", {
+				model: embeddingRequest.model,
+				inputCount: inputs.length,
+				inputLengths: inputs.map((input: string) => input.length),
 			});
-		})
-	);
 
-	// API/PS - List running models
-	router.get(
-		"/api/ps",
-		asyncHandler(async (req: Request, res: Response) => {
-			const allWorkers = workerRegistry.getAllWorkers();
-			const runningModels = [];
+			try {
+				const result =
+					await jobScheduler.submitAndWait(embeddingRequest);
 
-			for (const worker of allWorkers) {
-				if (worker.status === "online" && worker.currentJobs > 0) {
-					// In a real implementation, you'd track which specific models are loaded
-					// For now, we'll simulate based on available models
-					for (const model of worker.capabilities.availableModels.slice(
-						0,
-						1
-					)) {
-						// Simulate one loaded model per worker
-						runningModels.push({
-							name: model.name,
-							model: model.name,
-							size: model.size,
-							digest: model.digest,
-							details: model.details,
-							expires_at: new Date(
-								Date.now() + 5 * 60 * 1000
-							).toISOString(), // 5 minutes from now
-							size_vram: model.size,
-						});
-					}
-				}
+				// Convert GridLLM response to Ollama embed format
+				const embedResponse = {
+					model: validatedData.model,
+					embeddings: result.embeddings || [],
+					total_duration: result.total_duration || 0,
+					load_duration: result.load_duration || 0,
+					prompt_eval_count:
+						result.prompt_eval_count ||
+						inputs.reduce(
+							(sum: number, input: string) =>
+								sum + input.split(" ").length,
+							0
+						),
+				};
+
+				res.json(embedResponse);
+			} catch (error) {
+				logger.job(embeddingRequest.id, "Ollama embed request failed", {
+					error:
+						error instanceof Error
+							? error.message
+							: "Unknown error",
+				});
+				throw error;
 			}
-
-			res.json({ models: runningModels });
 		})
 	);
 
@@ -908,67 +694,59 @@ export const ollamaRoutes = (
 
 			validateModelExists(validatedData.model);
 
-			// Generate placeholder embedding
-			const embedding = Array.from(
-				{ length: 384 },
-				() => Math.random() * 2 - 1
+			const embeddingRequest: InferenceRequest = {
+				id: uuidv4(),
+				model: validatedData.model,
+				input: [validatedData.prompt], // Convert to array format
+				options: validatedData.options || {},
+				priority: "medium",
+				timeout: 300000,
+				metadata: {
+					requestType: "embedding",
+					ollamaEndpoint: "/api/embeddings",
+					keep_alive: validatedData.keep_alive,
+					submittedAt: new Date().toISOString(),
+					clientIp: req.ip,
+					userAgent: req.get("User-Agent"),
+				},
+			};
+
+			logger.job(
+				embeddingRequest.id,
+				"Ollama embeddings (legacy) request submitted",
+				{
+					model: embeddingRequest.model,
+					promptLength: validatedData.prompt.length,
+				}
 			);
 
-			res.json({
-				embedding,
-			});
-		})
-	);
+			try {
+				const result =
+					await jobScheduler.submitAndWait(embeddingRequest);
 
-	// API/VERSION - Get version
-	router.get(
-		"/api/version",
-		asyncHandler(async (req: Request, res: Response) => {
-			res.json({
-				version: "0.5.1",
-			});
-		})
-	);
+				// Convert GridLLM response to legacy Ollama embeddings format
+				// The legacy endpoint returns a single embedding, not an array
+				const embedding =
+					result.embeddings && result.embeddings.length > 0
+						? result.embeddings[0]
+						: [];
 
-	// BLOB endpoints for model creation
-	router.head(
-		"/api/blobs/:digest",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { digest } = req.params;
-
-			if (!digest) {
-				res.status(400).end();
-				return;
+				res.json({
+					embedding,
+				});
+			} catch (error) {
+				logger.job(
+					embeddingRequest.id,
+					"Ollama embeddings (legacy) request failed",
+					{
+						error:
+							error instanceof Error
+								? error.message
+								: "Unknown error",
+					}
+				);
+				throw error;
 			}
-
-			// Check if blob exists (placeholder implementation)
-			const exists = digest.startsWith("sha256:");
-
-			if (exists) {
-				res.status(200).end();
-			} else {
-				res.status(404).end();
-			}
-		})
-	);
-
-	router.post(
-		"/api/blobs/:digest",
-		asyncHandler(async (req: Request, res: Response) => {
-			const { digest } = req.params;
-
-			// Handle blob upload (placeholder implementation)
-			logger.info("Blob upload requested", {
-				digest,
-				contentLength: req.get("Content-Length"),
-			});
-
-			// In a real implementation, you would:
-			// 1. Validate the SHA256 digest
-			// 2. Store the blob
-			// 3. Verify the digest matches
-
-			res.status(201).end();
 		})
 	);
 

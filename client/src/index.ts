@@ -1,4 +1,3 @@
-import "module-alias/register";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -69,7 +68,6 @@ class WorkerApplication {
 				connectedToServer:
 					this.workerClient.getConnectionStatus().isConnected,
 				availableModels: capabilities?.availableModels.length || 0,
-				performanceTier: capabilities?.performanceTier || "unknown",
 				timestamp: new Date().toISOString(),
 			});
 		});

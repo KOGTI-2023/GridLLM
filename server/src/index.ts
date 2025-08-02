@@ -1,4 +1,3 @@
-import "module-alias/register";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -171,6 +170,19 @@ class GridLLMServer {
 				workerId: data.workerId,
 				timeout: data.jobAssignment.timeout,
 			});
+		});
+
+		this.jobScheduler.on("job_orphaned", (data) => {
+			logger.job(
+				data.jobAssignment.jobId,
+				"Job orphaned due to worker disconnect",
+				{
+					originalWorkerId: data.originalWorkerId,
+					requeueCount: data.requeuedRequest.metadata?.requeueCount,
+					newPriority: data.requeuedRequest.priority,
+					model: data.jobAssignment.request.model,
+				}
+			);
 		});
 
 		// Process events

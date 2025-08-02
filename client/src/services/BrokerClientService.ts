@@ -8,7 +8,6 @@ import {
 	NodeCapabilities,
 	WorkerStatus,
 	BrokerConnection,
-	SystemResources,
 	InferenceRequest,
 	InferenceResponse,
 } from "@/types";
@@ -137,14 +136,10 @@ export class BrokerClientService extends EventEmitter {
 			logger.info("Gathering node capabilities");
 
 			const models = await this.ollamaService.getAvailableModels();
-			const systemResources =
-				await this.ollamaService.getSystemResources();
 
 			const capabilities: NodeCapabilities = {
 				workerId: config.worker.id,
 				availableModels: models,
-				systemResources,
-				performanceTier: this.determinePerformanceTier(systemResources),
 				maxConcurrentTasks: config.worker.maxConcurrentJobs,
 				supportedFormats: ["json", "text"],
 				lastUpdated: new Date(),
@@ -153,7 +148,6 @@ export class BrokerClientService extends EventEmitter {
 			logger.info("Node capabilities gathered", {
 				workerId: capabilities.workerId,
 				modelCount: capabilities.availableModels.length,
-				performanceTier: capabilities.performanceTier,
 				maxConcurrentTasks: capabilities.maxConcurrentTasks,
 			});
 
@@ -162,31 +156,6 @@ export class BrokerClientService extends EventEmitter {
 			logger.error("Failed to gather node capabilities", error);
 			throw error;
 		}
-	}
-
-	private determinePerformanceTier(
-		resources: SystemResources
-	): "high" | "medium" | "low" {
-		// Determine performance tier based on system resources
-		const cpuScore =
-			resources.cpuCores >= 8 ? 3 : resources.cpuCores >= 4 ? 2 : 1;
-		const memoryScore =
-			resources.totalMemoryMB >= 16384
-				? 3
-				: resources.totalMemoryMB >= 8192
-					? 2
-					: 1;
-		const gpuScore = resources.gpuMemoryMB
-			? resources.gpuMemoryMB >= 16384
-				? 3
-				: 2
-			: 0;
-
-		const totalScore = cpuScore + memoryScore + gpuScore;
-
-		if (totalScore >= 7) return "high";
-		if (totalScore >= 4) return "medium";
-		return "low";
 	}
 
 	private async connectToBroker(): Promise<void> {
@@ -442,29 +411,12 @@ export class BrokerClientService extends EventEmitter {
 		if (!this.capabilities) return;
 
 		try {
-			const systemResources =
-				await this.ollamaService.getSystemResources();
-
-			// Check if resources are within acceptable limits
-			// if (this.shouldPauseWorker(systemResources)) {
-			//   logger.warn('Resource usage high, pausing worker', {
-			//     cpuUsage: systemResources.cpuUsagePercent,
-			//     memoryUsage: systemResources.memoryUsagePercent,
-			//   });
-
-			//   if (this.workQueueService) {
-			//     await this.workQueueService.pause();
-			//   }
-			//   return;
-			// }
-
 			// Resume worker if it was paused
 			if (this.workQueueService) {
 				await this.workQueueService.resume();
 			}
 
 			// Update capabilities
-			this.capabilities.systemResources = systemResources;
 			this.capabilities.lastUpdated = new Date();
 
 			// Update broker with new capabilities
@@ -481,18 +433,6 @@ export class BrokerClientService extends EventEmitter {
 		} catch (error) {
 			logger.error("Failed to update capabilities", error);
 		}
-	}
-
-	private shouldPauseWorker(resources: SystemResources): boolean {
-		return (
-			resources.cpuUsagePercent > config.performance.maxCpuUsage ||
-			resources.memoryUsagePercent > config.performance.maxMemoryUsage ||
-			resources.availableMemoryMB <
-				config.performance.minAvailableMemoryMB ||
-			(resources.gpuUsagePercent !== undefined &&
-				resources.gpuUsagePercent >
-					config.performance.maxGpuMemoryUsage)
-		);
 	}
 
 	private async processInferenceJob(
@@ -514,18 +454,50 @@ export class BrokerClientService extends EventEmitter {
 
 			await job.updateProgress(25);
 
-			// Process inference
+			// Check if this is an embedding request
+			const isEmbeddingRequest =
+				request.metadata?.requestType === "embedding";
+
+			logger.info("Processing job assignment", {
+				jobId: job.id,
+				requestType: request.metadata?.requestType,
+				isEmbeddingRequest,
+				hasInput: !!request.input,
+				hasPrompt: !!request.prompt,
+				metadata: request.metadata,
+			});
+
+			// Process request based on type
 			let result: InferenceResponse | undefined;
 
-			if (request.stream) {
-				// For streaming, we'll collect the full response
-				// In a real implementation, you'd want to stream this back
+			if (isEmbeddingRequest) {
+				logger.info("Handling as embedding request");
+				// Handle embedding request
+				result = await this.ollamaService.generateEmbedding(request);
+			} else if (request.stream) {
+				logger.info("Handling as streaming inference request");
+				// For streaming inference, publish each chunk as it arrives
 				let fullResponse = "";
 				for await (const chunk of this.ollamaService.generateStreamResponse(
 					request
 				)) {
 					fullResponse += chunk.response;
 					await job.updateProgress(25 + (chunk.done ? 50 : 25));
+
+					// Publish streaming chunk to the stream channel
+					await this.redisManager.publish(
+						`job:stream:${request.id}`,
+						JSON.stringify({
+							jobId: request.id,
+							workerId: config.worker.id,
+							chunk: {
+								id: chunk.id,
+								response: chunk.response,
+								done: chunk.done,
+							},
+							timestamp: new Date().toISOString(),
+						})
+					);
 
 					if (chunk.done) {
 						result = {
@@ -537,6 +509,7 @@ export class BrokerClientService extends EventEmitter {
 					}
 				}
 			} else {
+				// Non-streaming inference
 				result = await this.ollamaService.generateResponse(request);
 			}
 
