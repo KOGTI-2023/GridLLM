@@ -59,8 +59,8 @@ jobs:
           org.opencontainers.image.description=${{ matrix.app }} application built from ${{ steps.tags.outputs.build_type }}
           org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           org.opencontainers.image.revision=${{ github.sha }}
-        cache-from: type=gha,scope=${{ matrix.app }}
-        cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+        cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}-${{ matrix.app }}:buildcache
+        cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}-${{ matrix.app }}:buildcache,mode=max
 
     - name: Image digest
       run: echo "${{ matrix.app }} image pushed successfully"
