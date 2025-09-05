@@ -59,11 +59,13 @@ npm run dev:client
 GridLLM provides **100% API compatibility** with Ollama. To switch your existing applications from Ollama to GridLLM's distributed system, simply change your base URL:
 
 **Before (Ollama):**
+
 ```
 http://localhost:11434
 ```
 
 **After (GridLLM):**
+
 ```
 http://localhost:4000/ollama
 ```
@@ -91,8 +93,9 @@ curl http://localhost:4000/ollama/api/tags
 ```
 
 Your applications will now automatically benefit from:
+
 - **Distributed processing** across multiple workers
-- **Intelligent load balancing** 
+- **Intelligent load balancing**
 - **Automatic failover** if workers go down
 - **Better resource utilization** across your infrastructure
 
@@ -282,6 +285,7 @@ GridLLM/
 ### Development Setup
 
 1. **Prerequisites**
+
    ```bash
    # Install Node.js 18+
    node --version  # Should be 18+
@@ -294,6 +298,7 @@ GridLLM/
    ```
 
 2. **Environment Setup**
+
    ```bash
    # Clone and install
    git clone <repository-url>
@@ -309,6 +314,7 @@ GridLLM/
    ```
 
 3. **Development Commands**
+
    ```bash
    # Start development servers
    npm run dev:server    # Start server in development mode
@@ -355,6 +361,7 @@ npm run test:watch
 ### Production Deployment with Docker
 
 1. **Prepare Environment**
+
    ```bash
    # Clone to production server
    git clone <repository-url>
@@ -365,6 +372,7 @@ npm run test:watch
    ```
 
 2. **Deploy Services**
+
    ```bash
    # Start complete system
    docker-compose up -d
@@ -415,6 +423,7 @@ Key metrics tracked by GridLLM:
 ### Common Issues
 
 1. **Worker Connection Issues**
+
    ```bash
    # Check worker connectivity
    curl http://localhost:3000/health
@@ -427,6 +436,7 @@ Key metrics tracked by GridLLM:
    ```
 
 2. **Redis Connection Problems**
+
    ```bash
    # Test Redis connectivity
    redis-cli ping
@@ -439,6 +449,7 @@ Key metrics tracked by GridLLM:
    ```
 
 3. **Job Processing Issues**
+
    ```bash
    # Check job queues
    curl http://localhost:4000/api/queue/status
