@@ -60,13 +60,13 @@ GridLLM provides **100% API compatibility** with Ollama. To switch your existing
 
 **Before (Ollama):**
 
-```
+```text
 http://localhost:11434
 ```
 
 **After (GridLLM):**
 
-```
+```text
 http://localhost:4000/ollama
 ```
 
@@ -256,7 +256,7 @@ POST /api/workers/:workerId/heartbeat
 
 ### Project Structure
 
-```
+```text
 GridLLM/
 ├── server/                 # Central orchestration server
 │   ├── src/
